@@ -206,7 +206,19 @@ masterr uninstall
 
 ---
 
+## 💖 Credits & Acknowledgements
+
+Special thanks and huge credit to:
+- **[Gakuseei](https://github.com/Gakuseei)** — Original author and creator of the foundational Quickshell architecture, Torii aesthetic theme, lockscreen shaders, and [rishot](https://github.com/Gakuseei/rishot). If you love this setup, consider supporting [Gakuseei on Ko-fi](https://ko-fi.com/gakuseei).
+- **[Quickshell](https://github.com/quickshell-mirror/quickshell)** — The next-generation QtQuick/QML desktop shell framework for Wayland.
+- **[Hyprland](https://github.com/hyprwm/Hyprland)** — Dynamic tiling Wayland compositor.
+- **[Matugen](https://github.com/InioX/matugen)** — Material You color palette generator.
+- All wallpaper and asset artists credited in [CREDITS.md](configs/sddm/themes/torii/CREDITS.md) and [WALLPAPERS.md](WALLPAPERS.md).
+
+---
+
 ## 📜 License
 
 This project is licensed under the [MIT License](LICENSE).
+Copyright (c) 2026 Gakuseei, Krish Kamani.
 See [CREDITS](configs/sddm/themes/torii/CREDITS.md) for third-party asset credits.
