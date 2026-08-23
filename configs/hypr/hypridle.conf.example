@@ -1,0 +1,16 @@
+general {
+    lock_cmd = /home/erik/.config/hypr/scripts/lock.sh
+    before_sleep_cmd = loginctl lock-session
+    after_sleep_cmd = hyprctl dispatch dpms on
+}
+
+listener {
+    timeout = 300
+    on-timeout = /home/erik/.config/hypr/scripts/lock.sh
+}
+
+listener {
+    timeout = 360
+    on-timeout = hyprctl dispatch dpms off
+    on-resume = hyprctl dispatch dpms on
+}

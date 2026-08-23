@@ -1,0 +1,52 @@
+[general]
+fullscreen = false
+resize = { mode = "smart" }
+floating-hack = true
+auto-copy = false
+early-exit = ["all"]
+corner-roundness = 12
+initial-tool = "brush"
+copy-command = "wl-copy"
+annotation-size-factor = 2
+output-filename = "~/Pictures/Screenshots/Screenshot_%Y-%m-%d_%H-%M-%S_annotated.png"
+save-after-copy = false
+default-hide-toolbars = false
+focus-toggles-toolbars = false
+default-round-caps = true
+primary-highlighter = "block"
+no-window-decoration = false
+brush-smooth-history-size = 10
+title = "Satty"
+app-id = "org.satty.satty"
+notification-thumbnail = "screenshot"
+
+[font]
+family = "Inter"
+style = "Regular"
+fallback = [
+    "Noto Sans CJK SC",
+    "Noto Sans",
+    "JetBrainsMono Nerd Font"
+]
+
+[color-palette]
+palette = [
+    "#f17476ff",
+    "#e7e4e4ff",
+    "#ef5350ff",
+    "#66bb6aff",
+    "#ffa726ff",
+    "#ab47bcff",
+    "#290f10ff"
+]
+custom = [
+    "#f17476",
+    "#a5090c",
+    "#ebcbcc",
+    "#e7e4e4",
+    "#ef5350",
+    "#66bb6a",
+    "#ffa726",
+    "#ab47bc",
+    "#290f10"
+]

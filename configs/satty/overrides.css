@@ -1,0 +1,78 @@
+/* Satty Theme - Styled to match MasterR liquid glass setup */
+@define-color accent_color #f17476;
+@define-color accent_bg_color #f17476;
+@define-color accent_fg_color #290f10;
+@define-color window_bg_color #290f10;
+@define-color window_fg_color #e7e4e4;
+@define-color view_bg_color #290f10;
+@define-color view_fg_color #e7e4e4;
+@define-color headerbar_bg_color #371515;
+@define-color headerbar_fg_color #e7e4e4;
+@define-color headerbar_border_color rgba(255, 255, 255, 0.12);
+@define-color card_bg_color #411819;
+@define-color card_fg_color #e7e4e4;
+@define-color popover_bg_color #371515;
+@define-color popover_fg_color #e7e4e4;
+@define-color dialog_bg_color #371515;
+@define-color dialog_fg_color #e7e4e4;
+
+window {
+    background-color: #290f10;
+    color: #e7e4e4;
+    font-family: 'Inter', sans-serif;
+}
+
+.outer_box {
+    background-color: #290f10;
+}
+
+.inner_box {
+    background-color: #290f10;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+}
+
+.toolbar {
+    color: #e7e4e4;
+    background-color: #371515;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 6px 12px;
+    margin: 8px 12px;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.toolbar button {
+    border-radius: 10px;
+    background-color: transparent;
+    color: #bfb5b6;
+    padding: 6px 10px;
+    margin: 2px;
+    border: 1px solid transparent;
+    transition: all 150ms ease;
+}
+
+.toolbar button:hover {
+    background-color: #4d1d1e;
+    color: #f8f7f7;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+
+.toolbar button:checked,
+.toolbar button.active,
+button.editing {
+    background-color: #f17476;
+    color: #290f10;
+    border-color: #f17476;
+    font-weight: bold;
+}
+
+.toast {
+    color: #f8f7f7;
+    background-color: rgba(14, 29, 36, 0.94);
+    border: 1px solid #aa4042;
+    border-radius: 12px;
+    padding: 8px 16px;
+    margin-top: 50px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}

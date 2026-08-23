@@ -1,0 +1,242 @@
+#!/bin/sh
+#
+# masterr — control CLI for the MasterR shell.
+#
+# Thin wrapper over the two quickshell surfaces (the pill and the lock), their
+# watchdogs and the update engine. The watchdog is what keeps a surface alive: it
+# respawns `qs -c <name> -d` whenever the instance dies. So `stop` has to take the
+# watchdog down too or the surface just comes back, while `restart` leaves the
+# watchdog running and only cycles the instance.
+#
+#   masterr restart [pill|lock|all]   cycle a surface           (default: pill)
+#   masterr start   [pill|lock|all]   start the watchdog        (default: all)
+#   masterr stop    [pill|lock|all]   stop watchdog + surface   (default: all)
+#   masterr log     [pill|lock] [..]  follow the quickshell log (default: pill)
+#   masterr update                    check, show changelog, apply, restart
+#   masterr status                    what's running and the installed version
+
+SCRIPTS="${XDG_CONFIG_HOME:-$HOME/.config}/hypr/scripts"
+ENGINE="$SCRIPTS/masterr-update.py"
+WATCHDOG="$SCRIPTS/watchdog.sh"
+SURFACES="pill lock"
+
+# The installer's Hanko skin: a vermilion edge marker, a quiet connector gutter
+# and the rice's ember palette. Dropped whole when stdout is not a terminal or
+# NO_COLOR is set, so a pipe gets clean plain text.
+if [ -t 1 ] && [ -z "${NO_COLOR:-}" ]; then
+    verm=$(printf '\033[38;2;192;68;43m')
+    flame=$(printf '\033[38;2;255;154;100m')
+    cream=$(printf '\033[38;2;230;214;203m')
+    bright=$(printf '\033[38;2;255;246;240m')
+    dim=$(printf '\033[38;2;138;125;116m')
+    faint=$(printf '\033[38;2;111;99;91m')
+    rst=$(printf '\033[0m')
+else
+    verm=""; flame=""; cream=""; bright=""; dim=""; faint=""; rst=""
+fi
+
+# A section header: the vermilion edge marker and a cream title.
+sec() { printf '\n  %s▌%s %s%s%s\n' "$verm" "$rst" "$cream" "$1" "$rst"; }
+# A bare connector bar that breathes between rows.
+gap() { printf '  %s▏%s\n' "$faint" "$rst"; }
+# A content line hung on the connector gutter (the segment arrives pre-coloured).
+row() { printf '  %s▏%s  %s\n' "$faint" "$rst" "$1"; }
+
+# A one-off action: the ember done marker, the verb in cream, what it touched bright.
+act()  { printf '  %s▫%s %s%s%s %s%s%s\n' "$flame" "$rst" "$cream" "$1" "$rst" "$bright" "$2" "$rst"; }
+note() { printf '  %s▫%s %s%s%s\n' "$faint" "$rst" "$dim" "$*" "$rst"; }
+die()  { printf '  %s▌%s %s%s%s\n' "$verm" "$rst" "$verm" "$*" "$rst" >&2; exit 1; }
+
+# One help row: command flame, its argument dim, the description cream, default faint.
+urow() {
+    row "$(printf '%s%-8s%s %s%-16s%s %s%-30s%s %s%s%s' \
+        "$flame" "$1" "$rst" "$dim" "$2" "$rst" "$cream" "$3" "$rst" "$faint" "$4" "$rst")"
+}
+
+usage() {
+    sec "masterr · control the shell"
+    gap
+    urow restart "[pill·lock·all]" "cycle a surface"                "(pill)"
+    urow start   "[pill·lock·all]" "start the watchdog"             "(all)"
+    urow stop    "[pill·lock·all]" "stop watchdog and surface"      "(all)"
+    urow log     "[pill·lock]"     "follow the quickshell log"      "(pill)"
+    urow update  ""                "check, then apply an update"     ""
+    urow status  ""                "what's running and the version"  ""
+    urow uninstall ""              "remove the configs, restore backups" ""
+    gap
+}
+
+# Expand a target argument into the surfaces it names, falling back to the
+# per-command default ($2) when no argument was given.
+targets() {
+    case "${1:-$2}" in
+        all) printf '%s' "$SURFACES" ;;
+        pill | lock) printf '%s' "${1:-$2}" ;;
+        *) die "unknown target '$1' (pill, lock or all)" ;;
+    esac
+}
+
+is_up() { qs -c "$1" ipc show >/dev/null 2>&1; }
+wd_up() { pgrep -f "watchdog.sh $1" >/dev/null 2>&1; }
+
+# Launch a detached watchdog. A second one for the same surface hits the flock in
+# watchdog.sh and exits at once, so this is safe to call when one already runs.
+start_wd() { setsid sh "$WATCHDOG" "$1" >/dev/null 2>&1 & }
+
+installed_version() {
+    qsdir="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell"
+    if [ -L "$qsdir" ]; then
+        repo=$(git -C "$(readlink -f "$qsdir")" rev-parse --show-toplevel 2>/dev/null)
+        if [ -n "$repo" ]; then
+            printf 'dev %s' "$(git -C "$repo" rev-parse --short HEAD 2>/dev/null)"
+            return
+        fi
+    fi
+    mf="${XDG_STATE_HOME:-$HOME/.local/state}/masterr/update.json"
+    if [ -f "$mf" ] && command -v jq >/dev/null 2>&1; then
+        sha=$(jq -r '.syncedSha // empty' "$mf")
+        [ -n "$sha" ] && { printf '%s' "$(echo "$sha" | cut -c1-7)"; return; }
+    fi
+    printf 'unknown'
+}
+
+cmd_start() {
+    for s in $(targets "$1" all); do
+        if wd_up "$s"; then
+            note "$s already running"
+        else
+            start_wd "$s"
+            act started "$s"
+        fi
+    done
+}
+
+cmd_stop() {
+    for s in $(targets "$1" all); do
+        pkill -f "watchdog.sh $s" 2>/dev/null
+        qs -c "$s" kill >/dev/null 2>&1
+        act stopped "$s"
+    done
+}
+
+cmd_restart() {
+    for s in $(targets "$1" pill); do
+        had_wd=no
+        wd_up "$s" && had_wd=yes
+        qs -c "$s" kill >/dev/null 2>&1
+        sleep 0.4
+        if [ "$had_wd" = yes ]; then
+            is_up "$s" || qs -c "$s" -d >/dev/null 2>&1
+        else
+            start_wd "$s"
+        fi
+        act restarted "$s"
+    done
+}
+
+cmd_log() {
+    surface=pill
+    case "$1" in
+        pill | lock) surface="$1"; shift ;;
+    esac
+    exec qs -c "$surface" log -f "$@"
+}
+
+cmd_update() {
+    [ -f "$ENGINE" ] || die "update engine missing ($ENGINE)"
+    command -v python3 >/dev/null 2>&1 || die "python3 not found"
+    command -v jq >/dev/null 2>&1 || die "jq not found"
+
+    json=$(python3 "$ENGINE" check) || die "update check failed"
+    status=$(printf '%s' "$json" | jq -r '.status // "error"')
+    case "$status" in
+        devmode) note "dev install, update with git pull"; return 0 ;;
+        offline) die "offline, can't reach the update remote" ;;
+        noclone) die "no update clone yet, open the in-app updater once first" ;;
+        ok) ;;
+        *) die "$(printf '%s' "$json" | jq -r '.error // "update check failed"')" ;;
+    esac
+
+    behind=$(printf '%s' "$json" | jq -r '.behind // 0')
+    version=$(printf '%s' "$json" | jq -r '.version // ""')
+    if [ "$behind" = 0 ]; then
+        act "up to date" "$version"
+        return 0
+    fi
+
+    fromd=$(printf '%s' "$json" | jq -r '.fromDate // ""')
+    tod=$(printf '%s' "$json" | jq -r '.toDate // ""')
+    sec "$behind commit(s) behind"
+    gap
+    row "${faint}$fromd -> $tod${rst}"
+    gap
+    printf '%s' "$json" | jq -r '.changelog[]?' | while IFS= read -r line; do
+        row "${flame}·${rst} ${cream}${line}${rst}"
+    done
+    deps=$(printf '%s' "$json" | jq -r '[.missingDeps[]?.name] | join(", ")')
+    [ -n "$deps" ] && { gap; row "${dim}new packages${rst}   ${cream}${deps}${rst}"; }
+    conf=$(printf '%s' "$json" | jq -r '.conflicts | length')
+    [ "$conf" -gt 0 ] 2>/dev/null && { gap; row "${faint}${conf} edited file(s) clash with upstream, kept as you have them${rst}"; }
+    gap
+
+    printf '  %s▌%s %sapply update?%s %s[Y/n]%s ' "$verm" "$rst" "$cream" "$rst" "$dim" "$rst"
+    read -r ans
+    case "$ans" in
+        "" | y | Y | yes | YES) ;;
+        *) note "skipped"; return 0 ;;
+    esac
+
+    ids=$(printf '%s' "$json" | jq -r '[.missingDeps[]?.id] | join(",")')
+    if [ -n "$ids" ]; then
+        result=$(python3 "$ENGINE" apply --install-deps "$ids") || die "apply failed"
+    else
+        result=$(python3 "$ENGINE" apply) || die "apply failed"
+    fi
+
+    nfail=$(printf '%s' "$result" | jq -r '.depFailures | length')
+    if [ "$nfail" -gt 0 ] 2>/dev/null; then
+        note "some packages didn't install:"
+        printf '%s' "$result" | jq -r '.depFailures[]? | .id + ": " + .error' | while IFS= read -r line; do
+            row "${faint}·${rst} ${dim}${line}${rst}"
+        done
+    fi
+
+    restart=$(printf '%s' "$result" | jq -r '.restartNeeded')
+    [ "$restart" = true ] && cmd_restart pill
+    act "updated to" "$version"
+}
+
+cmd_uninstall() {
+    installer="${XDG_DATA_HOME:-$HOME/.local/share}/masterr/installer/masterr_install.py"
+    [ -f "$installer" ] || die "installer not found ($installer); remove ~/.config/hypr and ~/.config/quickshell by hand, your originals sit next to them as .bak"
+    command -v python3 >/dev/null 2>&1 || die "python3 not found"
+    exec python3 "$installer" --uninstall
+}
+
+cmd_status() {
+    sec "masterr"
+    gap
+    for s in $SURFACES; do
+        if is_up "$s"; then mk="${flame}●${rst}"; lab="${cream}$s${rst}"; stt="${cream}running${rst}"
+        else mk="${faint}○${rst}"; lab="${dim}$s${rst}"; stt="${dim}stopped${rst}"; fi
+        if wd_up "$s"; then wdt="${dim}watchdog up${rst}"; else wdt="${faint}no watchdog${rst}"; fi
+        row "$mk $lab   $stt   $wdt"
+    done
+    gap
+    row "${dim}version${rst}   ${cream}$(installed_version)${rst}"
+    gap
+}
+
+cmd="$1"
+[ $# -gt 0 ] && shift
+case "$cmd" in
+    restart) cmd_restart "$1" ;;
+    start) cmd_start "$1" ;;
+    stop) cmd_stop "$1" ;;
+    log) cmd_log "$@" ;;
+    update) cmd_update ;;
+    status) cmd_status ;;
+    uninstall) cmd_uninstall ;;
+    "" | -h | --help | help) usage ;;
+    *) die "unknown command '$cmd' (try: masterr help)" ;;
+esac

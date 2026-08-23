@@ -1,0 +1,42 @@
+/* Rice matching color definitions for GTK3 / GTK4 / Libadwaita */
+@define-color theme_bg_color #371515;
+@define-color theme_fg_color #e7e4e4;
+@define-color theme_base_color #290f10;
+@define-color theme_text_color #e7e4e4;
+@define-color theme_selected_bg_color #f17476;
+@define-color theme_selected_fg_color #290f10;
+@define-color insensitive_bg_color #311213;
+@define-color insensitive_fg_color #766b6b;
+@define-color insensitive_base_color #290f10;
+@define-color theme_unfocused_bg_color #371515;
+@define-color theme_unfocused_fg_color #bfb5b6;
+@define-color theme_unfocused_base_color #290f10;
+@define-color theme_unfocused_text_color #bfb5b6;
+@define-color theme_unfocused_selected_bg_color #f17476;
+@define-color theme_unfocused_selected_fg_color #290f10;
+
+@define-color accent_color #f17476;
+@define-color accent_bg_color #f17476;
+@define-color accent_fg_color #290f10;
+@define-color window_bg_color #290f10;
+@define-color window_fg_color #e7e4e4;
+@define-color view_bg_color #290f10;
+@define-color view_fg_color #e7e4e4;
+@define-color headerbar_bg_color #371515;
+@define-color headerbar_fg_color #e7e4e4;
+@define-color headerbar_border_color rgba(255, 255, 255, 0.12);
+@define-color card_bg_color #411819;
+@define-color card_fg_color #e7e4e4;
+@define-color popover_bg_color #371515;
+@define-color popover_fg_color #e7e4e4;
+@define-color dialog_bg_color #371515;
+@define-color dialog_fg_color #e7e4e4;
+
+window, .view, .sidebar, headerbar {
+  background-color: #290f10;
+  color: #e7e4e4;
+}
+
+.sidebar {
+  background-color: #371515;
+}

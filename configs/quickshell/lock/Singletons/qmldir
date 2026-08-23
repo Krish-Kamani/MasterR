@@ -1,0 +1,5 @@
+singleton Theme Theme.qml
+singleton Dyn Dyn.qml
+singleton Flags Flags.qml
+singleton Cava Cava.qml
+singleton Pw Pw.qml

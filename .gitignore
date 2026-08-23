@@ -1,0 +1,92 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor swap
+*.swp
+*.bak
+*.tmp
+
+# Legacy migration artifacts
+*.legacy
+
+# install.sh ownership markers and config backups, only ever live under ~/.config
+.masterr-managed
+*.bak-masterr-*
+
+# Per-machine
+.envrc
+
+# Personal notes / transcripts / planning, local only
+memory/
+Claude.md
+
+# Machine-specific install/partition plan, local only
+configs/partition-day-sequence.md
+
+# Hyprland auto-generates this stub if no .conf found, never track
+configs/hypr/hyprland.conf
+
+# GhostType app-managed hotkey snippets (machine-specific exec path), never track
+configs/hypr/ghosttype.conf
+configs/hypr/ghosttype.lua
+
+# Local-only hypr binds (machine-specific scripts, not for public rice)
+configs/hypr/modules/private.lua
+
+# Live idle/lock timeouts, owned by Settings; tracked template is the .example.
+# Tracked it used to revert git-pull users' auto-lock choice on every pull (#17)
+configs/hypr/hypridle.conf
+
+# Personal Discord push-to-talk + virtual PipeWire nodes (machine hardware), local only
+configs/hypr/discord.lua
+configs/hypr/scripts/discord-mic.sh
+configs/hypr/scripts/discord-out.sh
+configs/hypr/scripts/discord-mute.sh
+configs/hypr/scripts/sounds/
+
+# Personal machine-only module (loaded via pcall from hyprland.lua) + its pieces
+configs/hypr/local.lua
+configs/hypr/crosshair.lua
+
+# Editor lua language-server config, local only
+configs/hypr/.luarc.json
+
+# Brainstorm mockups, local only
+.superpowers/
+
+# Wallpapers: local until final curated 2560x1440 set exists, then un-ignore + commit
+wallpapers/
+
+# Specs / brainstorm docs, local only (never commit docs/)
+docs/
+.playwright/
+.playwright-mcp/
+
+# internal / personal, never public
+/CLAUDE.md
+/configs/decisions.md
+/configs/mount-disks.sh
+/configs/grub/probe-sda4.sh
+/configs/grub/10_masterr
+__pycache__/
+*.pyc
+configs/hypr/hyprsunset.conf
+.impeccable/
+
+# Secrets & Personal Keys
+*api-key*
+*API-KEY*
+*.env
+*.env.local
+*.key
+*.pem
+*.token
+*.credentials
+API-KEYs.md
+
+# State and logs
+*.log
+.cache/
+.local/state/
+configs/session/

@@ -1,0 +1,46 @@
+font-family = JetBrainsMono Nerd Font
+font-size = 12
+adjust-cell-height = 8%
+
+window-padding-x = 14
+window-padding-y = 12
+window-padding-balance = true
+window-decoration = none
+
+background-opacity = 0.70
+background-blur = true
+
+cursor-style = block
+cursor-style-blink = true
+cursor-click-to-move = true
+mouse-hide-while-typing = true
+
+copy-on-select = clipboard
+keybind = ctrl+v=paste_from_clipboard
+confirm-close-surface = false
+
+# Warm MasterR default theme. The wallpaper picker writes a matching
+# palette to the cache file below, which overrides everything here.
+background = #1c120c
+foreground = #e6d6cb
+cursor-color = #e0563b
+selection-background = #594636
+selection-foreground = #fff6f0
+palette = 0=#2e231b
+palette = 1=#c0442b
+palette = 2=#8a9a5b
+palette = 3=#d89a5b
+palette = 4=#6f8da0
+palette = 5=#b06a78
+palette = 6=#7fa89a
+palette = 7=#e6d6cb
+palette = 8=#594636
+palette = 9=#e0563b
+palette = 10=#a8b56e
+palette = 11=#f0b85e
+palette = 12=#8fa9bb
+palette = 13=#d08a96
+palette = 14=#9fc3b4
+palette = 15=#fff6f0
+
+config-file = ?~/.cache/masterr/ghostty-colors
