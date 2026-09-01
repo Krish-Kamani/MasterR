@@ -93,5 +93,19 @@ hl.bind("XF86AudioPrev",             hl.dsp.global("quickshell:mediaPrev"),     
 -- ============================================================================
 -- SYSTEM & POWER
 -- ============================================================================
+hl.bind(mod .. " + Escape",          hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/open-surface.sh power"))     -- [System] Power Menu
 hl.bind(mod .. " + L",               hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/lock.sh"))                   -- [System] Lock Screen
 hl.bind(mod .. " + SHIFT + R",       hl.dsp.exec_cmd("hyprctl reload"))                                                       -- [System] Reload Hyprland Config
+hl.bind(mod .. " + X", hl.dsp.exec_cmd("prime-run prismlauncher")) -- [Apps] MINECRAFT
+
+-- ============================================================================
+-- LIQUID GLASS TOGGLE
+-- ============================================================================
+hl.bind(mod .. " + equal",           hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh on"))       -- [Glass] Turn Liquid Glass ON (Super + +)
+hl.bind(mod .. " + plus",            hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh on"))       -- [Glass] Turn Liquid Glass ON
+hl.bind(mod .. " + KP_Add",          hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh on"))       -- [Glass] Turn Liquid Glass ON (Numpad +)
+hl.bind(mod .. " + SHIFT + equal",   hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh on"))       -- [Glass] Turn Liquid Glass ON (Super + Shift + =)
+hl.bind(mod .. " + minus",           hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh off"))      -- [Glass] Turn Liquid Glass OFF (Super + -)
+hl.bind(mod .. " + KP_Subtract",     hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh off"))      -- [Glass] Turn Liquid Glass OFF (Numpad -)
+hl.bind(mod .. " + C", hl.dsp.exec_cmd("prime-run vscodium")) -- [Apps] VSCODIUM
+

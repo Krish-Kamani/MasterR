@@ -55,6 +55,7 @@ function deriveLabel(action, cmd) {
         if (/open-surface\.sh\s+gameMode/i.test(cmd)) return "Game Mode";
         if (/open-surface\.sh\s+packages/i.test(cmd)) return "Package Manager";
         if (/open-surface\.sh\s+keybinds/i.test(cmd)) return "System Keybinds";
+        if (/open-surface\.sh\s+power/i.test(cmd)) return "Power Menu";
         if (/overview-toggle\.sh/i.test(cmd)) return "Workspace Overview";
         if (/float-toggle\.sh/i.test(cmd)) return "Toggle Floating Window";
         if (/float-window\.sh/i.test(cmd)) return "Float & Pin Window";

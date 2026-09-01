@@ -1,0 +1,620 @@
+#!/usr/bin/env python3
+"""
+auto-app-icon-fixer: Automatically detects desktop applications missing icons,
+searches for their logos on the web, downloads high-quality icons, and updates
+.desktop entries following the XDG specification.
+"""
+
+import os
+import sys
+import re
+import time
+import json
+import urllib.request
+import urllib.parse
+import urllib.error
+import argparse
+import shutil
+import subprocess
+from pathlib import Path
+
+# Paths
+USER_HOME = Path.home()
+USER_APP_DIR = USER_HOME / ".local" / "share" / "applications"
+USER_ICON_DIR = USER_HOME / ".local" / "share" / "icons"
+USER_PIXMAP_DIR = USER_HOME / ".local" / "share" / "pixmaps"
+
+SYSTEM_APP_DIRS = [
+    USER_APP_DIR,
+    Path("/usr/local/share/applications"),
+    Path("/usr/share/applications"),
+    Path("/var/lib/flatpak/exports/share/applications"),
+    USER_HOME / ".local" / "share" / "flatpak" / "exports" / "share" / "applications",
+    Path("/var/lib/snapd/desktop/applications"),
+]
+
+ICON_SEARCH_DIRS = [
+    USER_ICON_DIR,
+    USER_PIXMAP_DIR,
+    Path("/usr/share/icons"),
+    Path("/usr/share/pixmaps"),
+    USER_HOME / ".icons",
+]
+
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+)
+
+
+def get_current_icon_theme():
+    """Detect active icon theme from kde/gtk configs or default to Papirus-Dark."""
+    kde_globals = USER_HOME / ".config" / "kdeglobals"
+    if kde_globals.is_file():
+        try:
+            content = kde_globals.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"\[Icons\]\s*\n\s*Theme\s*=\s*([^\n\r]+)", content)
+            if m:
+                return m.group(1).strip()
+        except Exception:
+            pass
+
+    gtk3_ini = USER_HOME / ".config" / "gtk-3.0" / "settings.ini"
+    if gtk3_ini.is_file():
+        try:
+            content = gtk3_ini.read_text(encoding="utf-8", errors="ignore")
+            m = re.search(r"gtk-icon-theme-name\s*=\s*([^\n\r]+)", content)
+            if m:
+                return m.group(1).strip()
+        except Exception:
+            pass
+
+    return "Papirus-Dark"
+
+
+def parse_desktop_file(file_path: Path):
+    """Simple parser for XDG .desktop files."""
+    try:
+        content = file_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+
+    entry = {
+        "path": file_path,
+        "name": file_path.stem,
+        "raw_name": "",
+        "icon": "",
+        "exec": "",
+        "comment": "",
+        "categories": "",
+        "nodisplay": False,
+        "type": "Application",
+    }
+
+    in_desktop_entry = False
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("["):
+            in_desktop_entry = (line == "[Desktop Entry]")
+            continue
+        if not in_desktop_entry:
+            continue
+
+        if "=" in line:
+            key, val = line.split("=", 1)
+            key = key.strip()
+            val = val.strip()
+            if key == "Name" and not entry["raw_name"]:
+                entry["name"] = val
+                entry["raw_name"] = val
+            elif key == "Icon":
+                entry["icon"] = val
+            elif key == "Exec":
+                entry["exec"] = val
+            elif key == "Comment":
+                entry["comment"] = val
+            elif key == "Categories":
+                entry["categories"] = val
+            elif key == "NoDisplay":
+                entry["nodisplay"] = (val.lower() == "true")
+            elif key == "Type":
+                entry["type"] = val
+
+    return entry
+
+
+def icon_exists_on_system(icon_str: str, current_theme: str) -> bool:
+    """Check if an icon exists either as absolute path or in system/user icon themes.
+
+    For theme icon names, we ONLY check the 'apps/' category subdirectories,
+    because that is what Quickshell.iconPath() resolves for app launcher icons.
+    Icons that exist in 'devices/', 'panel/', 'status/' etc. won't be found by
+    the launcher, so we must treat them as missing.
+    """
+    if not icon_str or not icon_str.strip():
+        return False
+
+    icon_str = icon_str.strip()
+
+    # If absolute or relative path
+    if icon_str.startswith("/") or icon_str.startswith("~"):
+        expanded = Path(os.path.expanduser(icon_str))
+        return expanded.is_file()
+
+    extensions = [".png", ".svg", ".xpm"]
+    theme_candidates = [
+        current_theme,
+        "Papirus-Dark",
+        "Papirus",
+        "hicolor",
+        "breeze-dark",
+        "breeze",
+        "Adwaita",
+    ]
+
+    # App-category subdirectory patterns inside a theme
+    apps_patterns = [
+        "scalable/apps",
+        "128x128/apps",
+        "96x96/apps",
+        "84x84/apps",
+        "64x64/apps",
+        "48x48/apps",
+        "42x42/apps",
+        "32x32/apps",
+        "24x24/apps",
+        "22x22/apps",
+        "16x16/apps",
+        "apps",
+    ]
+
+    for base_dir in ICON_SEARCH_DIRS:
+        if not base_dir.exists():
+            continue
+
+        # Direct file check in pixmaps (e.g. /usr/share/pixmaps/foo.png)
+        for ext in extensions + [""]:
+            target = base_dir / f"{icon_str}{ext}"
+            if target.is_file():
+                return True
+
+        # Check ONLY apps/ subdirectories inside icon themes
+        for theme in theme_candidates:
+            theme_dir = base_dir / theme
+            if not theme_dir.is_dir():
+                continue
+
+            for apps_dir in apps_patterns:
+                check_path = theme_dir / apps_dir
+                if check_path.is_dir():
+                    for ext in extensions:
+                        if (check_path / f"{icon_str}{ext}").is_file():
+                            return True
+
+    return False
+
+
+def find_icon_in_other_categories(icon_str: str, current_theme: str) -> Path | None:
+    """Find an icon that exists in the theme but outside the apps/ category.
+
+    For example, 'network-wired' lives under devices/ in Papirus.
+    Returns the path to the best (largest) matching icon file, or None.
+    """
+    if not icon_str or icon_str.startswith("/") or icon_str.startswith("~"):
+        return None
+
+    theme_candidates = [current_theme, "Papirus-Dark", "Papirus", "hicolor", "breeze-dark", "breeze"]
+    extensions = [".svg", ".png", ".xpm"]
+    best_match = None
+    best_size = 0
+
+    for base_dir in ICON_SEARCH_DIRS:
+        if not base_dir.exists():
+            continue
+        for theme in theme_candidates:
+            theme_dir = base_dir / theme
+            if not theme_dir.is_dir():
+                continue
+            for match in theme_dir.glob(f"**/{icon_str}.*"):
+                if not match.is_file():
+                    continue
+                if match.suffix not in extensions:
+                    continue
+                # Skip if it's in apps/ (we already checked that)
+                # Prefer SVG, then largest PNG
+                size = 9999 if match.suffix == ".svg" else 0
+                for part in match.parts:
+                    # Extract numeric size from path components like "48x48"
+                    if "x" in part:
+                        try:
+                            size = max(size, int(part.split("x")[0]))
+                        except ValueError:
+                            pass
+                if size > best_size:
+                    best_size = size
+                    best_match = match
+
+    return best_match
+
+
+def wait_for_network(timeout_seconds: int = 180) -> bool:
+    """Wait until an active internet connection is verified."""
+    start_time = time.time()
+    test_urls = [
+        "https://1.1.1.1",
+        "https://8.8.8.8",
+        "https://duckduckgo.com",
+        "https://archlinux.org",
+    ]
+    print(f"\033[1;34m::\033[0m Waiting for internet connection (timeout: {timeout_seconds}s)...")
+    while time.time() - start_time < timeout_seconds:
+        for url in test_urls:
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+                with urllib.request.urlopen(req, timeout=3):
+                    print("\033[1;32m✔ Internet connection established!\033[0m")
+                    return True
+            except Exception:
+                continue
+        time.sleep(3)
+    print("\033[1;33m!\033[0m Network connection check timed out.")
+    return False
+
+
+def sanitize_filename(name: str) -> str:
+    """Convert an app name into a clean filename slug."""
+    clean = re.sub(r"[^\w\s-]", "", name).strip().lower()
+    return re.sub(r"[-\s]+", "-", clean) or "custom-app"
+
+
+def http_get(url: str, headers: dict = None, timeout: int = 10) -> bytes:
+    """Helper to perform HTTP GET requests safely."""
+    req_headers = {"User-Agent": USER_AGENT}
+    if headers:
+        req_headers.update(headers)
+    req = urllib.request.Request(url, headers=req_headers)
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return resp.read()
+
+
+def search_simple_icons(app_name: str):
+    """Check SimpleIcons CDN / repo for known open-source / tech logos."""
+    slug = sanitize_filename(app_name).replace("-", "")
+    urls_to_try = [
+        f"https://cdn.simpleicons.org/{slug}",
+        f"https://cdn.simpleicons.org/{app_name.lower().replace(' ', '')}",
+    ]
+    for url in urls_to_try:
+        try:
+            data = http_get(url, timeout=4)
+            if data and b"<svg" in data and b"404 Not Found" not in data:
+                return {"url": url, "title": f"{app_name} (SimpleIcons Vector)", "source": "SimpleIcons", "data": data}
+        except Exception:
+            continue
+    return None
+
+
+def search_duckduckgo_images(query: str, max_results: int = 6):
+    """Search DuckDuckGo for logos."""
+    try:
+        # Step 1: Obtain vqd token
+        token_url = f"https://duckduckgo.com/?q={urllib.parse.quote(query)}"
+        token_page = http_get(token_url, timeout=6).decode("utf-8", errors="ignore")
+        vqd_match = re.search(r'vqd=([\d-]+)&', token_page) or re.search(r'vqd=[\'\"]([^\'\"]+)[\'\"]', token_page)
+        if not vqd_match:
+            return []
+        vqd = vqd_match.group(1)
+
+        # Step 2: Fetch images JSON
+        search_url = (
+            f"https://duckduckgo.com/i.js?q={urllib.parse.quote(query)}"
+            f"&o=json&vqd={vqd}&p=1"
+        )
+        data = http_get(search_url, headers={"Referer": "https://duckduckgo.com/"}, timeout=8)
+        res_json = json.loads(data.decode("utf-8", errors="ignore"))
+        results = []
+        for item in res_json.get("results", []):
+            img_url = item.get("image")
+            title = item.get("title", "")
+            if img_url and (img_url.lower().endswith(('.png', '.svg', '.webp', '.jpg', '.jpeg')) or 'logo' in img_url.lower()):
+                results.append({
+                    "url": img_url,
+                    "title": title,
+                    "width": item.get("width"),
+                    "height": item.get("height"),
+                    "source": "DuckDuckGo",
+                })
+                if len(results) >= max_results:
+                    break
+        return results
+    except Exception:
+        return []
+
+
+def search_wikimedia_logo(app_name: str):
+    """Search Wikimedia Commons for brand logos."""
+    try:
+        api_url = (
+            f"https://en.wikipedia.org/w/api.php?action=query&titles={urllib.parse.quote(app_name)}"
+            f"&prop=pageimages&format=json&pithumbsize=512"
+        )
+        data = json.loads(http_get(api_url, timeout=5).decode("utf-8", errors="ignore"))
+        pages = data.get("query", {}).get("pages", {})
+        for _, page in pages.items():
+            thumb = page.get("thumbnail", {}).get("source")
+            if thumb:
+                return {"url": thumb, "title": page.get("title", app_name), "source": "Wikipedia"}
+    except Exception:
+        pass
+    return None
+
+
+def fetch_best_logo(app_name: str):
+    """Orchestrate search strategies to find candidate logos."""
+    candidates = []
+
+    # 1. SimpleIcons (fast & clean SVG for developer / popular tools)
+    simple = search_simple_icons(app_name)
+    if simple:
+        candidates.append(simple)
+
+    # 2. Wikipedia brand logo
+    wiki = search_wikimedia_logo(app_name)
+    if wiki:
+        candidates.append(wiki)
+
+    # 3. DuckDuckGo image search
+    queries = [
+        f"{app_name} logo png",
+        f"{app_name} linux app logo icon png",
+        f"{app_name} icon logo",
+    ]
+    for q in queries:
+        ddg_results = search_duckduckgo_images(q, max_results=4)
+        if ddg_results:
+            candidates.extend(ddg_results)
+            break
+
+    return candidates
+
+
+def download_and_save_icon(img_url: str, app_slug: str, raw_data: bytes = None) -> Path:
+    """Download the image and save to ~/.local/share/icons."""
+    USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
+
+    if raw_data is None:
+        raw_data = http_get(img_url, timeout=12)
+
+    # Determine extension
+    ext = ".png"
+    if raw_data.startswith(b"<?xml") or b"<svg" in raw_data[:300]:
+        ext = ".svg"
+    elif raw_data.startswith(b"\x89PNG"):
+        ext = ".png"
+    elif raw_data.startswith(b"\xff\xd8\xff"):
+        ext = ".jpg"
+    elif raw_data.startswith(b"RIFF") and b"WEBP" in raw_data[:16]:
+        ext = ".webp"
+
+    dest_path = USER_ICON_DIR / f"{app_slug}{ext}"
+    dest_path.write_bytes(raw_data)
+    return dest_path
+
+
+def apply_icon_to_desktop_entry(entry: dict, icon_path: Path):
+    """Write/override the .desktop file with the new Icon path."""
+    USER_APP_DIR.mkdir(parents=True, exist_ok=True)
+    orig_path = entry["path"]
+    target_desktop = USER_APP_DIR / orig_path.name
+
+    try:
+        content = orig_path.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        content = (
+            "[Desktop Entry]\n"
+            f"Name={entry['name']}\n"
+            f"Exec={entry['exec']}\n"
+            f"Type={entry['type']}\n"
+        )
+
+    # Update or add Icon=
+    new_icon_line = f"Icon={str(icon_path)}"
+    if re.search(r"^Icon=.*$", content, flags=re.MULTILINE):
+        new_content = re.sub(r"^Icon=.*$", new_icon_line, content, flags=re.MULTILINE)
+    else:
+        # Append inside [Desktop Entry]
+        if "[Desktop Entry]" in content:
+            new_content = content.replace("[Desktop Entry]\n", f"[Desktop Entry]\n{new_icon_line}\n")
+        else:
+            new_content = f"[Desktop Entry]\n{new_icon_line}\n" + content
+
+    target_desktop.write_text(new_content, encoding="utf-8")
+
+    # Update desktop database
+    try:
+        subprocess.run(["update-desktop-database", str(USER_APP_DIR)], capture_output=True)
+    except Exception:
+        pass
+
+
+def scan_all_applications(include_hidden: bool = False):
+    """Scan all XDG directories and return a map of unique applications."""
+    apps = {}
+    for app_dir in SYSTEM_APP_DIRS:
+        if not app_dir.is_dir():
+            continue
+        for f in sorted(app_dir.glob("*.desktop")):
+            # User overrides take precedence over system entries
+            if f.name in apps:
+                continue
+            parsed = parse_desktop_file(f)
+            if not parsed:
+                continue
+            if parsed["nodisplay"] and not include_hidden:
+                continue
+            apps[f.name] = parsed
+
+    return apps
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Scan desktop apps, find missing icons, search and apply logos automatically."
+    )
+    parser.add_argument(
+        "--auto", "-y", action="store_true",
+        help="Automatically download and apply best found logo for missing apps without prompting"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Only scan and list apps with missing or broken icons without making changes"
+    )
+    parser.add_argument(
+        "--app", type=str,
+        help="Target a specific app by name or .desktop filename"
+    )
+    parser.add_argument(
+        "--force", action="store_true",
+        help="Force search and replace logo even if the app already has an icon"
+    )
+    parser.add_argument(
+        "--include-hidden", action="store_true",
+        help="Include apps with NoDisplay=true"
+    )
+    parser.add_argument(
+        "--wait-for-network", type=int, default=0, metavar="TIMEOUT_SECS",
+        help="Wait up to TIMEOUT_SECS for internet connectivity before running search (ideal for on-boot services)"
+    )
+
+    args = parser.parse_args()
+
+    current_theme = get_current_icon_theme()
+    print(f"\033[1;34m::\033[0m Active Icon Theme: \033[1;32m{current_theme}\033[0m")
+
+    print("\033[1;34m::\033[0m Scanning installed applications...")
+    all_apps = scan_all_applications(include_hidden=args.include_hidden)
+
+    target_apps = []
+    for desktop_name, entry in all_apps.items():
+        if args.app:
+            if args.app.lower() not in entry["name"].lower() and args.app.lower() not in desktop_name.lower():
+                continue
+
+        icon = entry["icon"]
+        has_icon = icon_exists_on_system(icon, current_theme)
+        if not has_icon or args.force:
+            target_apps.append(entry)
+
+    if not target_apps:
+        if args.app:
+            print(f"\033[1;33m!\033[0m No matching app found for '{args.app}' or app already has a valid icon (use --force to override).")
+        else:
+            print("\033[1;32m✔ All scanned applications have valid icons!\033[0m")
+        return
+
+    print(f"\033[1;33m!\033[0m Found \033[1m{len(target_apps)}\033[0m app(s) to process:\n")
+    for i, app in enumerate(target_apps, 1):
+        raw_icon = app["icon"] or "(none)"
+        print(f"  {i}. \033[1m{app['name']}\033[0m (\033[90m{app['path'].name}\033[0m) - Icon: \033[33m{raw_icon}\033[0m")
+
+    if args.dry_run:
+        print("\n\033[90m[Dry run completed. No changes made.]\033[0m")
+        return
+
+    print("\n\033[1;34m::\033[0m Resolving missing icons...")
+
+    fixed_count = 0
+    need_web_search = []
+
+    # PASS 1: Try to reuse icons from other theme categories (e.g. devices/, panel/)
+    for app in target_apps:
+        app_name = app["name"]
+        icon_name = app["icon"]
+        slug = sanitize_filename(app["path"].stem or app_name)
+
+        existing = find_icon_in_other_categories(icon_name, current_theme)
+        if existing:
+            try:
+                USER_ICON_DIR.mkdir(parents=True, exist_ok=True)
+                dest = USER_ICON_DIR / f"{slug}{existing.suffix}"
+                shutil.copy2(str(existing), str(dest))
+                apply_icon_to_desktop_entry(app, dest)
+                print(f"\033[1;32m  ✔ {app_name}\033[0m — reused theme icon: {existing.name}")
+                fixed_count += 1
+            except Exception as e:
+                print(f"\033[31m  ✗ {app_name}: failed to copy theme icon: {e}\033[0m")
+                need_web_search.append(app)
+        else:
+            need_web_search.append(app)
+
+    if not need_web_search:
+        print(f"\n\033[1;32m✔ Finished!\033[0m Successfully updated \033[1m{fixed_count}\033[0m app icon(s).")
+        print("Your app launcher will now display the new logos.")
+        return
+
+    # Wait for network only if we actually need web search
+    if args.wait_for_network > 0:
+        connected = wait_for_network(args.wait_for_network)
+        if not connected:
+            print("\033[31m✗ No internet connection. Skipping web search.\033[0m")
+            if fixed_count:
+                print(f"\n\033[1;32m✔ Finished!\033[0m Updated \033[1m{fixed_count}\033[0m icon(s) from theme. {len(need_web_search)} still missing.")
+            return
+
+    # PASS 2: Web search for remaining apps
+    print(f"\n\033[1;34m::\033[0m Searching online for {len(need_web_search)} remaining icon(s)...")
+
+    for app in need_web_search:
+        app_name = app["name"]
+        slug = sanitize_filename(app["path"].stem or app_name)
+        print(f"\n\033[1;36m==>\033[0m Searching logo for '\033[1m{app_name}\033[0m'...")
+
+        candidates = fetch_best_logo(app_name)
+        if not candidates:
+            exec_bin = app["exec"].split()[0] if app["exec"] else ""
+            if exec_bin and exec_bin != app_name:
+                candidates = fetch_best_logo(exec_bin)
+
+        if not candidates:
+            print(f"  \033[31m✗ No online logo found for {app_name}.\033[0m")
+            continue
+
+        selected_candidate = None
+        if args.auto:
+            selected_candidate = candidates[0]
+        else:
+            print(f"  Found {len(candidates)} candidate(s):")
+            for idx, c in enumerate(candidates, 1):
+                title = c.get("title", c.get("url"))
+                src = c.get("source", "")
+                print(f"    [{idx}] {src}: {title} (\033[90m{c['url'][:65]}...\033[0m)")
+
+            try:
+                prompt = input(f"  Apply top logo [1] / Choose [1-{len(candidates)}] / Skip [s]? (default: 1): ").strip()
+                if prompt.lower() == 's':
+                    print(f"  Skipped {app_name}.")
+                    continue
+                elif prompt.isdigit() and 1 <= int(prompt) <= len(candidates):
+                    selected_candidate = candidates[int(prompt) - 1]
+                else:
+                    selected_candidate = candidates[0]
+            except (EOFError, KeyboardInterrupt):
+                selected_candidate = candidates[0]
+
+        try:
+            print(f"  Downloading logo from: {selected_candidate['url']}...")
+            raw_data = selected_candidate.get("data")
+            saved_path = download_and_save_icon(selected_candidate["url"], slug, raw_data)
+            apply_icon_to_desktop_entry(app, saved_path)
+            print(f"  \033[1;32m✔ Applied icon:\033[0m {saved_path}")
+            fixed_count += 1
+        except Exception as e:
+            print(f"  \033[31m✗ Failed to download/apply icon: {e}\033[0m")
+
+    print(f"\n\033[1;32m✔ Finished!\033[0m Successfully updated \033[1m{fixed_count}\033[0m app icon(s).")
+    print("Your app launcher will now display the new logos.")
+
+
+if __name__ == "__main__":
+    main()

@@ -74,7 +74,7 @@ PillSurface {
         if (focusIndex < 0)
             focusIndex = dir > 0 ? 0 : actions.length - 1;
         else
-            focusIndex = Math.max(0, Math.min(actions.length - 1, focusIndex + dir));
+            focusIndex = (focusIndex + dir + actions.length) % actions.length;
     }
 
     /**
@@ -108,6 +108,8 @@ PillSurface {
         keyHeld = false;
         holdingIndex = -1;
         holdProgress = 0;
+    } else {
+        focusIndex = 0;
     }
 
     Item {
@@ -179,7 +181,7 @@ PillSurface {
                     readonly property bool lit: isHover || tile.holding
                     readonly property color accent: cell.modelData.confirm ? Theme.vermLit : Theme.cream
 
-                    onKbFocusChanged: {
+                    function updateSoulPos() {
                         if (!tile.kbFocus)
                             return;
                         root.hovered = cell.modelData.key;
@@ -187,6 +189,16 @@ PillSurface {
                         const c = tile.mapToItem(root, tile.width / 2, 0);
                         root.hoverX = c.x;
                         root.hoverY = c.y - 9 * root.s;
+                    }
+
+                    onKbFocusChanged: updateSoulPos()
+
+                    Connections {
+                        target: root
+                        function onSettledChanged() {
+                            if (root.settled)
+                                tile.updateSoulPos();
+                        }
                     }
 
                     /**

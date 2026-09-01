@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=MasterR Glass
+Description=Liquid Glass theme matching Hyprland MasterR rice with animated ember password beads and dynamic wallpaper support.
+Author=Krish Kamani
+License=MIT
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=masterr-glass
+Theme-API=2.0
+QtVersion=6

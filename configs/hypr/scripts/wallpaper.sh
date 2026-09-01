@@ -213,6 +213,7 @@ palette_update() {
     else
         python3 "$(dirname "$0")/wallcolors.py" "$show" >>"$WLOG" 2>&1 || true
     fi
+    "$(dirname "$0")/sync-theme-wallpaper.sh" "$show" >/dev/null 2>&1 &
     hyprctl reload >/dev/null 2>&1 || true
     busctl --user call com.mitchellh.ghostty /com/mitchellh/ghostty org.gtk.Actions \
         Activate "sava{sv}" reload-config 0 0 >/dev/null 2>&1 || true

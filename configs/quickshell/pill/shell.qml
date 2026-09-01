@@ -405,6 +405,7 @@ ShellRoot {
                         return;
                     }
                     if (pill.keybindsOpen && !pill.keybindsListening) { pill.keybindsMove(-1); e.accepted = true; return; }
+                    else if (pill.powerOpen) { pill.powerMove(-1); e.accepted = true; }
                     e.accepted = pill.mixerStep(1) || pill.recorderStep(5) || pill.settingsMove(-1);
                 }
                 Keys.onDownPressed: (e) => {
@@ -419,6 +420,7 @@ ShellRoot {
                         return;
                     }
                     if (pill.keybindsOpen && !pill.keybindsListening) { pill.keybindsMove(1); e.accepted = true; return; }
+                    else if (pill.powerOpen) { pill.powerMove(1); e.accepted = true; }
                     e.accepted = pill.mixerStep(-1) || pill.recorderStep(-5) || pill.settingsMove(1);
                 }
                 Keys.onLeftPressed: (e) => {

@@ -55,8 +55,9 @@ configs/hypr/.luarc.json
 # Brainstorm mockups, local only
 .superpowers/
 
-# Wallpapers: local until final curated 2560x1440 set exists, then un-ignore + commit
-wallpapers/
+# Wallpapers
+# wallpapers/
+
 
 # Specs / brainstorm docs, local only (never commit docs/)
 docs/
