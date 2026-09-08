@@ -7,7 +7,6 @@ hl.bind(mod .. " + Return",         hl.dsp.exec_cmd("ghostty"))                 
 hl.bind(mod .. " + E",              hl.dsp.exec_cmd("dolphin"))                                       -- [Apps] File Manager
 hl.bind(mod .. " + B",              hl.dsp.exec_cmd("prime-run zen-browser"))                         -- [Apps] Zen Web Browser
 hl.bind(mod .. " + SHIFT + C",       hl.dsp.exec_cmd("hyprpicker -a"))                                 -- [Apps] Color Picker
-hl.bind(mod .. " + CTRL + SHIFT + X", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/launch-carx.sh")) -- [Apps] CarX Street
 
 -- ============================================================================
 -- WINDOW MANAGEMENT
