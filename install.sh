@@ -109,11 +109,11 @@ main() {
 	# updater, not through a full re-install; re-running the one-liner is almost
 	# always someone looking for "how do I update". --reinstall forces the wizard.
 	if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/.masterr-managed" ] \
-		&& ! has_flag --reinstall "$@" && ! has_flag --uninstall "$@"; then
+		&& ! has_flag --reinstall "$@" && ! has_flag --uninstall "$@" && ! has_flag --purge "$@"; then
 		say "MasterR is already installed."
 		say "  Update:       open Settings > Updates in the pill, or run: masterr update"
-		say "  Re-install:   curl -fsSL https://raw.githubusercontent.com/Krish-Kamani/MasterR/main/install.sh | sh -s -- --reinstall"
-		say "  Uninstall:    masterr uninstall"
+		say "  Re-install:   ./reinstall.sh  (or: install.sh --reinstall)"
+		say "  Uninstall:    ./uninstall.sh  (or: install.sh --uninstall / --purge)"
 		exit 0
 	fi
 

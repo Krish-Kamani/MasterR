@@ -207,10 +207,16 @@ cmd_update() {
 }
 
 cmd_uninstall() {
-    installer="${XDG_DATA_HOME:-$HOME/.local/share}/masterr/installer/masterr_install.py"
-    [ -f "$installer" ] || die "installer not found ($installer); remove ~/.config/hypr and ~/.config/quickshell by hand, your originals sit next to them as .bak"
-    command -v python3 >/dev/null 2>&1 || die "python3 not found"
-    exec python3 "$installer" --uninstall
+    share_dir="${XDG_DATA_HOME:-$HOME/.local/share}/masterr"
+    if [ -f "$share_dir/uninstall.sh" ]; then
+        exec "$share_dir/uninstall.sh" "$@"
+    fi
+    installer="$share_dir/installer/masterr_install.py"
+    if [ -f "$installer" ]; then
+        command -v python3 >/dev/null 2>&1 || die "python3 not found"
+        exec python3 "$installer" --uninstall "$@"
+    fi
+    die "uninstall script not found; remove ~/.config/hypr and ~/.config/quickshell by hand, your originals sit next to them as .bak"
 }
 
 cmd_status() {
@@ -236,7 +242,7 @@ case "$cmd" in
     log) cmd_log "$@" ;;
     update) cmd_update ;;
     status) cmd_status ;;
-    uninstall) cmd_uninstall ;;
+    uninstall) cmd_uninstall "$@" ;;
     "" | -h | --help | help) usage ;;
     *) die "unknown command '$cmd' (try: masterr help)" ;;
 esac

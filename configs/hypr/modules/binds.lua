@@ -7,6 +7,7 @@ hl.bind(mod .. " + Return",         hl.dsp.exec_cmd("ghostty"))                 
 hl.bind(mod .. " + E",              hl.dsp.exec_cmd("dolphin"))                                       -- [Apps] File Manager
 hl.bind(mod .. " + B",              hl.dsp.exec_cmd("prime-run zen-browser"))                         -- [Apps] Zen Web Browser
 hl.bind(mod .. " + SHIFT + C",       hl.dsp.exec_cmd("hyprpicker -a"))                                 -- [Apps] Color Picker
+hl.bind(mod .. " + CTRL + SHIFT + X", hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/launch-carx.sh")) -- [Apps] CarX Street
 
 -- ============================================================================
 -- WINDOW MANAGEMENT
@@ -18,10 +19,12 @@ hl.bind(mod .. " + SHIFT + T",      hl.dsp.exec_cmd(os.getenv("HOME") .. "/.conf
 hl.bind(mod .. " + M",              hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/minimize-toggle.sh")) -- [Window] Toggle Minimize Window
 hl.bind(mod .. " + mouse:272",      hl.dsp.window.drag(),   { mouse = true })                         -- [Window] Drag Window
 hl.bind(mod .. " + mouse:273",      hl.dsp.window.resize(), { mouse = true })                         -- [Window] Resize Window
+hl.gesture({ fingers = 3, direction = "swipe", action = "move" })                                      -- [Gestures] 3-Finger Drag / Move Window
 
 -- ============================================================================
 -- WORKSPACES NAVIGATION & MANAGEMENT
 -- ============================================================================
+hl.gesture({ fingers = 4, direction = "horizontal", action = "workspace" })                           -- [Gestures] 4-Finger Workspace Swipe
 hl.bind(mod .. " + Left",            hl.dsp.focus({ workspace = "r-1" }))                             -- [Workspaces] Previous Workspace
 hl.bind(mod .. " + Right",           hl.dsp.focus({ workspace = "r+1" }))                             -- [Workspaces] Next Workspace
 hl.bind(mod .. " + mouse_up",        hl.dsp.focus({ workspace = "r-1" }))                             -- [Workspaces] Previous Workspace (Scroll Up)

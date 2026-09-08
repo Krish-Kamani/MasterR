@@ -44,9 +44,12 @@ fi
 
 [ -s "$TMP_PNG" ] || exit 0
 
-# 1. Update SDDM Cache
+# Ensure world-readable permissions (0644) so SDDM daemon can read it
+chmod 644 "$TMP_PNG"
+
+# 1. Update SDDM Cache with world-readable permissions
 if [ -d "$SDDM_CACHE_DIR" ] && [ -w "$SDDM_CACHE_DIR" ]; then
-    cp "$TMP_PNG" "$SDDM_BG.tmp" 2>/dev/null && mv "$SDDM_BG.tmp" "$SDDM_BG" 2>/dev/null || true
+    cp "$TMP_PNG" "$SDDM_BG.tmp" 2>/dev/null && chmod 644 "$SDDM_BG.tmp" 2>/dev/null && mv "$SDDM_BG.tmp" "$SDDM_BG" 2>/dev/null || true
 fi
 
 # 2. Update GRUB Theme Background

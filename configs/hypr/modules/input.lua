@@ -9,6 +9,8 @@ hl.config({
         numlock_by_default = false,
         touchpad = {
             natural_scroll = true,
+            drag_3fg       = 1,
+            tap_to_click   = true,
         },
     },
     cursor = {
@@ -16,5 +18,12 @@ hl.config({
     },
     binds = {
         scroll_event_delay = 40,
+    },
+    gestures = {
+        workspace_swipe_distance = 300,
+        workspace_swipe_cancel_ratio = 0.5,
+        workspace_swipe_create_new = true,
+        workspace_swipe_direction_lock = true,
+        workspace_swipe_direction_lock_threshold = 10,
     },
 })

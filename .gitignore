@@ -6,6 +6,7 @@ Thumbs.db
 *.swp
 *.bak
 *.tmp
+preview.html
 
 # Legacy migration artifacts
 *.legacy

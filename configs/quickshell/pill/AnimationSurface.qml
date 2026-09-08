@@ -43,24 +43,24 @@ SettingsSurface {
     }
 
     readonly property string animPath: Quickshell.env("HOME") + "/.config/hypr/modules/animations.lua"
-    readonly property string mainCurve: "pillMorph"
+    readonly property string mainCurve: "smoothOut"
 
     property bool animOn: true
-    property real speed: 3
+    property real speed: 2.8
     property string animText: ""
     property bool loaded: false
     property var base: ({})
 
     /** Bezier control points, read 0..1 (y may overshoot); derived from the handles. */
-    property real cx1: 0.23
+    property real cx1: 0.16
     property real cy1: 1.0
-    property real cx2: 0.32
+    property real cx2: 0.30
     property real cy2: 1.0
 
     readonly property var presets: [
-        { label: "Smooth", x1: 0.23, y1: 1.0, x2: 0.32, y2: 1.0 },
-        { label: "Snappy", x1: 0.15, y1: 0.0, x2: 0.1, y2: 1.0 },
-        { label: "Linear", x1: 0.33, y1: 0.33, x2: 0.66, y2: 0.66 }
+        { label: "Smooth", x1: 0.16, y1: 1.0, x2: 0.30, y2: 1.0 },
+        { label: "Snappy", x1: 0.05, y1: 0.95, x2: 0.15, y2: 1.02 },
+        { label: "Linear", x1: 0.25, y1: 0.25, x2: 0.75, y2: 0.75 }
     ]
 
     onActiveChanged: {

@@ -864,58 +864,183 @@ def run(args):
     return 0
 
 
+def _stop_surfaces(dry):
+    """Stop active MasterR surfaces and background watchdogs."""
+    targets = ["watchdog.sh", "quickshell", "hyprsunset"]
+    stopped = []
+    for t in targets:
+        if dry:
+            print(f"  would stop: {t}")
+        else:
+            res = subprocess.run(["pkill", "-f", t], capture_output=True)
+            if res.returncode == 0:
+                print(f"  stopped: {t}")
+                stopped.append(t)
+    return stopped
+
+
+def _cleanup_paths(paths, dry):
+    """Remove cache, state and config folders specific to masterr."""
+    for p in paths:
+        path_obj = Path(p)
+        if path_obj.exists() or path_obj.is_symlink():
+            if dry:
+                print(f"  would remove: {p}")
+            else:
+                try:
+                    if str(p).startswith("/var") or str(p).startswith("/usr") or str(p).startswith("/etc"):
+                        subprocess.run(["sudo", "rm", "-rf", str(p)])
+                    elif path_obj.is_dir() and not path_obj.is_symlink():
+                        shutil.rmtree(path_obj)
+                    else:
+                        path_obj.unlink()
+                    print(f"  removed: {p}")
+                except OSError as exc:
+                    print(f"  could not remove {p}: {exc}")
+
+
+def _cleanup_sddm(dry):
+    """Remove MasterR SDDM theme files and config."""
+    sddm_paths = [
+        "/usr/share/sddm/themes/masterr-glass",
+        "/usr/share/sddm/themes/torii",
+        "/etc/sddm.conf.d/10-theme.conf",
+        "/etc/sddm.conf.d/20-xsetup.conf",
+        "/etc/sddm.conf.d/virtualkeyboard.conf",
+        "/etc/sddm/Xsetup-torii.sh",
+    ]
+    theme_conf = Path("/etc/sddm.conf.d/theme.conf")
+    existing = [p for p in sddm_paths if os.path.exists(p)]
+    if theme_conf.exists():
+        try:
+            if "masterr" in theme_conf.read_text():
+                existing.append(str(theme_conf))
+        except Exception:
+            pass
+    if existing:
+        if dry:
+            print("  would remove SDDM themes and configs:")
+            for p in existing:
+                print(f"    {p}")
+        else:
+            subprocess.run(["sudo", "rm", "-rf", *existing])
+            print("  removed MasterR SDDM themes and configs")
+
+
 def run_uninstall(args):
     """
     Remove every MasterR-managed config and put the pre-install backups back.
-    Packages stay; only the deployed files go. Confirms interactively before
-    touching anything, and refuses to run headless, since a piped one-liner
-    should never be able to wipe a config unattended.
+    With --purge, also stops processes, cleans cache, state, themes, binaries,
+    wallpapers, and repository clones.
     """
     dry = args.dry_run
+    purge = getattr(args, "purge", False)
     tui.banner()
     plan = deploy.uninstall(config_root=deploy.CONFIG_ROOT, apply=False)
     removals = [a for a in plan if a["action"] == "remove"]
-    if not removals:
+
+    if not removals and not purge:
         tui.info(["Nothing MasterR-managed found in ~/.config, nothing to remove."])
         tui.outro("Done")
         return 0
 
     lines = []
-    for a in removals:
-        line = f"Remove {a['dest']}"
-        if a["restored"]:
-            line += f", restore your backup from {a['restored']}"
-        lines.append(line)
-    lines.append("Installed packages are not touched.")
+    if removals:
+        for a in removals:
+            line = f"Remove {a['dest']}"
+            if a["restored"]:
+                line += f", restore your backup from {a['restored']}"
+            lines.append(line)
+    else:
+        lines.append("No MasterR-managed configs found in ~/.config.")
+
+    if purge:
+        lines.append("Stop active MasterR processes (quickshell, watchdogs)")
+        lines.append("Remove caches (~/.cache/masterr, /var/cache/masterr)")
+        lines.append("Remove state (~/.local/state/masterr)")
+        lines.append("Remove user binaries & symlinks (~/.local/bin/masterr, awww)")
+        lines.append("Remove SDDM and GRUB themes")
+        lines.append("Remove repo clone (~/.local/share/masterr) and ~/MasterR")
+    else:
+        lines.append("Installed packages are not touched.")
 
     if dry:
         tui.info(lines)
+        if purge:
+            print("\n:: Simulating full purge actions:")
+            _stop_surfaces(dry=True)
+            _cleanup_paths([
+                Path.home() / ".cache" / "masterr",
+                Path.home() / ".local" / "state" / "masterr",
+                Path.home() / ".config" / "masterr",
+                Path.home() / ".local" / "bin" / "masterr",
+                Path.home() / ".local" / "bin" / "awww",
+                Path.home() / ".local" / "bin" / "awww-daemon",
+                "/var/cache/masterr",
+                Path.home() / ".local" / "share" / "masterr",
+                Path.home() / "MasterR",
+            ], dry=True)
+            _cleanup_sddm(dry=True)
+            if os.path.isdir("/boot/grub"):
+                grub_theme.revert(dry=True)
         tui.outro("Dry run complete")
         return 0
-    try:
-        if not tui.confirm("Remove MasterR", lines):
-            tui.outro("Cancelled")
-            return 0
-    except RuntimeError:
-        tui.info(["No controlling terminal; run the uninstall from a real "
-                  "terminal so it can confirm first."])
-        return 1
 
-    for a in deploy.uninstall(config_root=deploy.CONFIG_ROOT, apply=True):
-        if a["action"] == "remove":
-            tail = f" (restored {a['restored']})" if a["restored"] else ""
-            print(f"  removed: {a['dest']}{tail}")
+    if not getattr(args, "yes", False):
+        try:
+            prompt_title = "Purge MasterR (Full Setup)" if purge else "Remove MasterR"
+            if not tui.confirm(prompt_title, lines):
+                tui.outro("Cancelled")
+                return 0
+        except RuntimeError:
+            tui.info(["No controlling terminal; pass -y/--yes or run from a terminal."])
+            return 1
+
+    if purge:
+        print(":: Stopping active MasterR processes...")
+        _stop_surfaces(dry=False)
+
+    if removals:
+        for a in deploy.uninstall(config_root=deploy.CONFIG_ROOT, apply=True):
+            if a["action"] == "remove":
+                tail = f" (restored {a['restored']})" if a["restored"] else ""
+                print(f"  removed: {a['dest']}{tail}")
 
     link = Path.home() / ".local" / "bin" / "masterr"
-    if link.is_symlink():
+    if link.is_symlink() or link.exists():
         try:
             link.unlink()
             print(f"  removed: {link}")
         except OSError:
             pass
-    tui.info(["The repo clone in ~/.local/share/masterr and your wallpapers in "
-              "~/MasterR are left for you to delete."])
-    tui.outro("MasterR removed")
+
+    if purge:
+        print(":: Cleaning caches, state and symlinks...")
+        _cleanup_paths([
+            Path.home() / ".cache" / "masterr",
+            Path.home() / ".local" / "state" / "masterr",
+            Path.home() / ".config" / "masterr",
+            Path.home() / ".local" / "bin" / "awww",
+            Path.home() / ".local" / "bin" / "awww-daemon",
+            "/var/cache/masterr",
+            Path.home() / ".local" / "share" / "masterr",
+            Path.home() / "MasterR",
+        ], dry=False)
+
+        print(":: Reverting themes...")
+        _cleanup_sddm(dry=False)
+        if os.path.isdir("/boot/grub"):
+            for act in grub_theme.revert(dry=False):
+                if act.get("ok"):
+                    print(f"  {act['desc']}")
+                else:
+                    print(f"  warning: {act['desc']} ({act.get('detail', '')})")
+
+        tui.outro("MasterR completely purged")
+    else:
+        tui.info(["The repo clone in ~/.local/share/masterr and your wallpapers in "
+                  "~/MasterR are left for you to delete. (Use --purge to remove all)"])
+        tui.outro("MasterR removed")
     return 0
 
 
@@ -940,14 +1065,19 @@ def main():
                         help="Run the full install over an existing MasterR install")
     parser.add_argument("--uninstall", action="store_true",
                         help="Remove the deployed configs and restore the backups")
+    parser.add_argument("--purge", action="store_true",
+                        help="Completely remove all MasterR caches, state, binaries, themes and extras")
+    parser.add_argument("-y", "--yes", action="store_true",
+                        help="Confirm uninstall non-interactively")
     args = parser.parse_args()
     try:
-        if args.uninstall:
+        if args.uninstall or args.purge:
             return run_uninstall(args)
         return run(args)
     except KeyboardInterrupt:
         tui.outro("Cancelled")
         return 130
+
 
 
 if __name__ == "__main__":

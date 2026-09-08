@@ -101,6 +101,53 @@ def apply(source, dry):
     return actions
 
 
+def _revert_plan():
+    """The revert actions as (desc, cmd) pairs, with no side effects."""
+    restore_default = (
+        f"Restore or clean {GRUB_DEFAULT}",
+        ["sudo", "sh", "-c",
+         f'if [ -f {shlex.quote(GRUB_BACKUP)} ]; then '
+         f'cp {shlex.quote(GRUB_BACKUP)} {shlex.quote(GRUB_DEFAULT)} && rm -f {shlex.quote(GRUB_BACKUP)}; '
+         f'else sed -i \'/^GRUB_THEME=.*masterr.*\\|^GRUB_THEME=.*torii.*/d\' {shlex.quote(GRUB_DEFAULT)}; fi'],
+    )
+    cleanup = (
+        "Remove MasterR GRUB themes and sync helpers",
+        ["sudo", "rm", "-rf",
+         THEME_DEST,
+         f"{GRUB_ROOT}/themes/masterr-glass",
+         "/usr/local/bin/sync-grub-bg",
+         "/etc/sudoers.d/masterr-grub-bg"],
+    )
+    regen = (
+        f"Regenerate {GRUB_CFG}",
+        ["sudo", "grub-mkconfig", "-o", GRUB_CFG],
+    )
+    return [restore_default, cleanup, regen]
+
+
+def revert(dry):
+    """
+    Revert the MasterR GRUB theme changes:
+    Restores /etc/default/grub, removes the installed themes, and regenerates grub.cfg.
+    """
+    actions = [{"desc": desc, "cmd": cmd} for desc, cmd in _revert_plan()]
+    if dry:
+        return actions
+
+    if not os.path.isdir(GRUB_ROOT) or not os.path.isfile(GRUB_DEFAULT):
+        missing = GRUB_ROOT if not os.path.isdir(GRUB_ROOT) else GRUB_DEFAULT
+        for action in actions:
+            action["ok"] = False
+            action["detail"] = f"{missing} not found, not a standard GRUB install"
+        return actions
+
+    for action in actions:
+        ok, detail = _run(action["cmd"])
+        action["ok"] = ok
+        action["detail"] = detail
+    return actions
+
+
 if __name__ == "__main__":
     src = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "configs")
@@ -110,4 +157,11 @@ if __name__ == "__main__":
         assert isinstance(a["cmd"], list) and a["cmd"], f"bad cmd in {a}"
         print(f"  {a['desc']}")
         print(f"    {' '.join(shlex.quote(x) for x in a['cmd'])}")
-    print("selftest ok: 3 dry actions, all with cmd lists")
+    rev = revert(dry=True)
+    assert len(rev) == 3, f"expected 3 revert actions, got {len(rev)}"
+    for a in rev:
+        assert isinstance(a["cmd"], list) and a["cmd"], f"bad revert cmd in {a}"
+        print(f"  {a['desc']}")
+        print(f"    {' '.join(shlex.quote(x) for x in a['cmd'])}")
+    print("selftest ok: 3 apply + 3 revert dry actions, all with cmd lists")
+

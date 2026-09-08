@@ -7,21 +7,20 @@ desktop-image: "background.png"
 desktop-color: "#0d1123"
 
 terminal-box: "assets/box_*.png"
-terminal-font: "JetBrains Mono Regular 14"
+terminal-font: "JetBrainsMono NF Regular 14"
 
 # Center Boot Menu Glass Box
 + boot_menu {
-    left = 28%
-    top = 30%
-    width = 44%
-    height = 45%
-    item_font = "JetBrains Mono Regular 14"
-    selected_item_font = "JetBrains Mono Regular 14"
+    left = 30%
+    top = 32%
+    width = 40%
+    height = 36%
+    item_font = "JetBrainsMono NF Regular 14"
+    selected_item_font = "JetBrainsMono NF Regular 14"
     item_color = "#b5b7bf"
     selected_item_color = "#ffffff"
-    item_height = 48
-    item_padding = 10
-    item_spacing = 8
+    item_height = 40
+    item_spacing = 18
     icon_width = 24
     icon_height = 24
     item_icon_space = 14
@@ -39,7 +38,7 @@ terminal-font: "JetBrains Mono Regular 14"
     show_text = false
     fg_color = "#748cf1"
     bg_color = "#161d3b"
-    border_color = "#00000000"
+    border_color = "transparent"
 }
 
 # Bottom Navigation Hints Label
@@ -49,6 +48,6 @@ terminal-font: "JetBrains Mono Regular 14"
     width = 100%
     align = "center"
     color = "#838591"
-    font = "JetBrains Mono Regular 14"
+    font = "JetBrainsMono NF Regular 14"
     text = "[↑/↓] Select    [Enter] Boot    [E] Edit Options    [C] Command Line"
 }
