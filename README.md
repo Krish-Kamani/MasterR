@@ -101,7 +101,7 @@ MasterR features an instant dual-profile rendering engine switchable on the fly:
   * `SUPER + M`: Toggle minimize active window into the Quickshell dock tray.
   * `SUPER + F`: Toggle true fullscreen.
   * `SUPER + LMB` / `RMB`: Interactive window drag and resize.
-  * Multi-touch gestures: 3-finger swipe window drag and 4-finger workspace swipe.
+  * Multi-touch gestures: 3-finger horizontal workspace swipe.
 
 <div align="center">
 
@@ -511,7 +511,6 @@ Re-runs setup over an existing installation while preserving your customized set
 | `SUPER + -` | **Turn Liquid Glass OFF / Solid Mode** (`liquid-glass.sh off`) |
 | `SUPER + LMB (mouse:272)` | Drag Floating Window |
 | `SUPER + RMB (mouse:273)` | Resize Floating Window |
-| `3-Finger Swipe` | Drag / Move Window via Touchpad Gesture |
 
 ---
 
@@ -523,7 +522,7 @@ Re-runs setup over an existing installation while preserving your customized set
 | `SUPER + ALT + 1` .. `9`, `0` | Move Active Window to Workspace 1–10 |
 | `SUPER + Left` / `SUPER + Right` | Switch to Previous / Next Workspace |
 | `SUPER + Mouse Scroll Up/Down` | Cycle Workspaces |
-| `4-Finger Horizontal Swipe` | Cycle Workspaces via Touchpad Gesture |
+| `3-Finger Horizontal Swipe` | Cycle Workspaces via Touchpad Gesture |
 | `SUPER + S` | Toggle Stash Workspace |
 | `SUPER + CTRL + ALT + S` | Move Active Window to Stash Workspace |
 | `SUPER + P` | Toggle Private Workspace |
