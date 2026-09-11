@@ -329,7 +329,7 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
                 atomic_write_bytes(live_path, merged)
                 sha_updates[rel] = head
             rows.append({"name": module_name(rel), "path": rel, "state": "merged"})
-        elif rel in take:
+        elif rel in take or "all" in take:
             if apply:
                 atomic_write_bytes(live_path, new)
                 sha_updates[rel] = head
@@ -340,15 +340,11 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
     return rows, conflicts, sha_updates
 
 
-def sync_code(clone, config_root, head, apply):
+def sync_code(clone, config_root, head, apply, force=False):
     """
     Overwrite every tracked config file that isn't protected with the upstream
     version. Ensures executable permissions are properly set. Returns True when
     at least one live file differed from upstream.
-
-    ponytail: L1 known ceiling. A file deleted upstream is never removed from the
-    live config, so renamed or dropped code files linger as orphans. Left as is on
-    purpose, since it only ever leaves stale files and never deletes a user's data.
     """
     protected = set(PROTECTED)
     changed = False
@@ -360,7 +356,7 @@ def sync_code(clone, config_root, head, apply):
             continue
         live_path = resolve_dest(rel, config_root)
         current = live_path.read_bytes() if live_path.exists() else None
-        if current == new:
+        if current == new and not force:
             continue
         changed = True
         if apply:
@@ -659,7 +655,7 @@ def ensure_system_integration(config_root):
             pass
 
 
-def run(mode, remote, config_root, take, install_ids):
+def run(mode, remote, config_root, take, install_ids, force=False):
     if is_devmode(config_root):
         return {"status": "devmode", "behind": 0, "fromDate": "", "toDate": "",
                 "version": "", "changelog": [], "codeChanged": False, "modules": [],
@@ -680,6 +676,8 @@ def run(mode, remote, config_root, take, install_ids):
 
     changelog = extract_changelog(clone, base, head)
     behind = behind_count(clone, base, head)
+    if force:
+        behind = max(behind, 1)
     from_date = commit_date(clone, base) if base else commit_date(clone, head)
     to_date = commit_date(clone, head)
     version = f"{short_sha(clone, head)} {to_date}"
@@ -690,7 +688,7 @@ def run(mode, remote, config_root, take, install_ids):
     missing = detect_missing_deps(clone, head)
 
     if first_run:
-        code_changed = sync_code(clone, config_root, head, apply)
+        code_changed = sync_code(clone, config_root, head, apply, force=force)
         rows = [{"name": module_name(rel), "path": rel, "state": "clean"}
                 for rel in PROTECTED]
         if apply:
@@ -700,17 +698,17 @@ def run(mode, remote, config_root, take, install_ids):
             ensure_system_integration(config_root)
         return {
             "status": "ok", "behind": behind, "fromDate": from_date, "toDate": to_date,
-            "version": version, "changelog": changelog, "codeChanged": code_changed,
+            "version": version, "changelog": changelog, "codeChanged": code_changed or force,
             "modules": rows, "conflicts": [], "missingDeps": missing,
             "depFailures": dep_failures, "applied": apply,
-            "restartNeeded": code_changed, "error": None,
+            "restartNeeded": code_changed or force, "error": None,
         }
 
     if apply:
         backup_protected(config_root)
     rows, conflicts, sha_updates = reconcile_protected(
         clone, config_root, manifest, head, apply, take)
-    code_changed = sync_code(clone, config_root, head, apply)
+    code_changed = sync_code(clone, config_root, head, apply, force=force)
 
     if apply:
         manifest.setdefault("modules", {}).update(sha_updates)
@@ -721,10 +719,10 @@ def run(mode, remote, config_root, take, install_ids):
     protected_changed = any(r["state"] in ("update", "merged") for r in rows)
     return {
         "status": "ok", "behind": behind, "fromDate": from_date, "toDate": to_date,
-        "version": version, "changelog": changelog, "codeChanged": code_changed,
+        "version": version, "changelog": changelog, "codeChanged": code_changed or force,
         "modules": rows, "conflicts": conflicts, "missingDeps": missing,
         "depFailures": dep_failures, "applied": apply,
-        "restartNeeded": code_changed or protected_changed, "error": None,
+        "restartNeeded": code_changed or protected_changed or force, "error": None,
     }
 
 
@@ -769,11 +767,16 @@ def parse_args(argv):
     take = set()
     install_ids = set()
     sha = None
+    force = False
     i = 0
     while i < len(argv):
         arg = argv[i]
         if arg in ("check", "apply", "baseline"):
             mode = arg
+        elif arg in ("--force", "-f"):
+            force = True
+        elif arg == "--take-all":
+            take.add("all")
         elif arg == "--sha":
             i += 1
             sha = take_value(argv, i, "--sha")
@@ -786,13 +789,13 @@ def parse_args(argv):
         elif arg == "--take":
             i += 1
             value = take_value(argv, i, "--take")
-            take = {p.strip() for p in value.split(",") if p.strip()}
+            take.update({p.strip() for p in value.split(",") if p.strip()})
         elif arg == "--install-deps":
             i += 1
             value = take_value(argv, i, "--install-deps")
             install_ids = {p.strip() for p in value.split(",") if p.strip()}
         i += 1
-    return mode, remote, config_root, take, install_ids, sha
+    return mode, remote, config_root, take, install_ids, sha, force
 
 
 def main(argv):
@@ -802,11 +805,11 @@ def main(argv):
     trailing flag with no value becomes an error JSON rather than an IndexError.
     """
     try:
-        mode, remote, config_root, take, install_ids, sha = parse_args(argv)
+        mode, remote, config_root, take, install_ids, sha, force = parse_args(argv)
         if mode == "baseline":
             result = baseline(config_root, sha)
         else:
-            result = run(mode, remote, config_root, take, install_ids)
+            result = run(mode, remote, config_root, take, install_ids, force=force)
     except BadArgs as exc:
         print(json.dumps(error_result("error", str(exc))))
         return 0

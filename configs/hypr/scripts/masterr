@@ -60,7 +60,7 @@ usage() {
     urow start   "[pill·lock·all]" "start the watchdog"             "(all)"
     urow stop    "[pill·lock·all]" "stop watchdog and surface"      "(all)"
     urow log     "[pill·lock]"     "follow the quickshell log"      "(pill)"
-    urow update  ""                "check, then apply an update"     ""
+    urow update  "[--force]"       "check, then apply an update"     ""
     urow status  ""                "what's running and the version"  ""
     urow settings ""               "launch MasterR Settings app"     ""
     urow uninstall ""              "remove the configs, restore backups" ""
@@ -148,7 +148,20 @@ cmd_update() {
     command -v python3 >/dev/null 2>&1 || die "python3 not found"
     command -v jq >/dev/null 2>&1 || die "jq not found"
 
-    json=$(python3 "$ENGINE" check) || die "update check failed"
+    force=false
+    take_all=false
+    for arg in "$@"; do
+        case "$arg" in
+            --force | -f) force=true ;;
+            --take-all) take_all=true ;;
+        esac
+    done
+
+    act "checking" "checking for updates from repository..."
+
+    check_args="check"
+    [ "$force" = true ] && check_args="$check_args --force"
+    json=$(python3 "$ENGINE" $check_args) || die "update check failed"
     status=$(printf '%s' "$json" | jq -r '.status // "error"')
     case "$status" in
         devmode) note "dev install, update with git pull"; return 0 ;;
@@ -161,8 +174,10 @@ cmd_update() {
     behind=$(printf '%s' "$json" | jq -r '.behind // 0')
     code_changed=$(printf '%s' "$json" | jq -r '.codeChanged // false')
     version=$(printf '%s' "$json" | jq -r '.version // ""')
-    if [ "$behind" = 0 ] && [ "$code_changed" != "true" ]; then
-        act "up to date" "$version"
+    if [ "$behind" = 0 ] && [ "$code_changed" != "true" ] && [ "$force" != true ]; then
+        act "up to date" "$version (already on latest commit)"
+        note "all configs and scripts are in sync with upstream"
+        note "to force re-sync configs and re-link binaries, run: masterr update --force"
         return 0
     fi
 
@@ -174,7 +189,7 @@ cmd_update() {
         sec "Updates available"
     fi
     gap
-    row "${faint}$fromd -> $tod${rst}"
+    [ -n "$fromd" ] && [ -n "$tod" ] && row "${faint}$fromd -> $tod${rst}"
     gap
     printf '%s' "$json" | jq -r '.changelog[]?' | while IFS= read -r line; do
         row "${flame}·${rst} ${cream}${line}${rst}"
@@ -182,22 +197,46 @@ cmd_update() {
     deps=$(printf '%s' "$json" | jq -r '[.missingDeps[]?.name] | join(", ")')
     [ -n "$deps" ] && { gap; row "${dim}new packages${rst}   ${cream}${deps}${rst}"; }
     conf=$(printf '%s' "$json" | jq -r '.conflicts | length')
-    [ "$conf" -gt 0 ] 2>/dev/null && { gap; row "${faint}${conf} edited file(s) clash with upstream, kept as you have them${rst}"; }
+    take_flag=""
+    if [ "$conf" -gt 0 ] 2>/dev/null; then
+        gap
+        row "${faint}${conf} edited file(s) differ from upstream:${rst}"
+        printf '%s' "$json" | jq -r '.conflicts[]?' | while IFS= read -r cfile; do
+            row "${dim}· $cfile${rst}"
+        done
+        if [ "$take_all" = true ] || [ "$force" = true ]; then
+            take_flag="--take all"
+            row "${flame}· overwriting conflicting files with upstream versions (--force)${rst}"
+        else
+            gap
+            printf '  %s▌%s %soverwrite conflicting file(s) with upstream versions?%s %s[y/N]%s ' "$verm" "$rst" "$cream" "$rst" "$dim" "$rst"
+            read -r take_ans
+            case "$take_ans" in
+                y | Y | yes | YES) take_flag="--take all" ;;
+                *) note "keeping your local edits" ;;
+            esac
+        fi
+    fi
     gap
 
-    printf '  %s▌%s %sapply update?%s %s[Y/n]%s ' "$verm" "$rst" "$cream" "$rst" "$dim" "$rst"
-    read -r ans
-    case "$ans" in
-        "" | y | Y | yes | YES) ;;
-        *) note "skipped"; return 0 ;;
-    esac
-
-    ids=$(printf '%s' "$json" | jq -r '[.missingDeps[]?.id] | join(",")')
-    if [ -n "$ids" ]; then
-        result=$(python3 "$ENGINE" apply --install-deps "$ids") || die "apply failed"
-    else
-        result=$(python3 "$ENGINE" apply) || die "apply failed"
+    if [ "$force" != true ]; then
+        printf '  %s▌%s %sapply update?%s %s[Y/n]%s ' "$verm" "$rst" "$cream" "$rst" "$dim" "$rst"
+        read -r ans
+        case "$ans" in
+            "" | y | Y | yes | YES) ;;
+            *) note "skipped"; return 0 ;;
+        esac
     fi
+
+    act "updating" "applying latest configs and scripts..."
+
+    apply_cmd="python3 \"$ENGINE\" apply"
+    [ -n "$take_flag" ] && apply_cmd="$apply_cmd $take_flag"
+    [ "$force" = true ] && apply_cmd="$apply_cmd --force"
+    ids=$(printf '%s' "$json" | jq -r '[.missingDeps[]?.id] | join(",")')
+    [ -n "$ids" ] && apply_cmd="$apply_cmd --install-deps \"$ids\""
+
+    result=$(eval "$apply_cmd") || die "apply failed"
 
     nfail=$(printf '%s' "$result" | jq -r '.depFailures | length')
     if [ "$nfail" -gt 0 ] 2>/dev/null; then
@@ -205,6 +244,11 @@ cmd_update() {
         printf '%s' "$result" | jq -r '.depFailures[]? | .id + ": " + .error' | while IFS= read -r line; do
             row "${faint}·${rst} ${dim}${line}${rst}"
         done
+    fi
+
+    if command -v hyprctl >/dev/null 2>&1; then
+        hyprctl reload >/dev/null 2>&1 || true
+        act "reloaded" "hyprland config"
     fi
 
     restart=$(printf '%s' "$result" | jq -r '.restartNeeded')
@@ -246,7 +290,7 @@ case "$cmd" in
     start) cmd_start "$1" ;;
     stop) cmd_stop "$1" ;;
     log) cmd_log "$@" ;;
-    update) cmd_update ;;
+    update) cmd_update "$@" ;;
     status) cmd_status ;;
     settings) exec "$SCRIPTS/masterr-settings" ;;
     uninstall) cmd_uninstall "$@" ;;
