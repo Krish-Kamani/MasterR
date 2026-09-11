@@ -205,8 +205,12 @@ install_wallpaper() {
 	local src="$1" base="$2" name wpdir dest
 	name="${base%.*}"
 	wpdir="$(jq -r '.wallpaperDir // ""' "${XDG_STATE_HOME:-$HOME/.local/state}/masterr/flags.json" 2>/dev/null || echo "")"
-	[ -n "$wpdir" ] || wpdir="$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/masterr-wallpaper-dir" 2>/dev/null || true)"
-	[ -n "$wpdir" ] || wpdir="$HOME/MasterR/wallpapers"
+	if [ -z "$wpdir" ] || [ ! -d "$wpdir" ]; then
+		for c in "$HOME/Pictures/Wallpapers" "$HOME/Pictures/wallpapers" "${XDG_DATA_HOME:-$HOME/.local/share}/masterr/wallpapers" "$HOME/DEV/Masterr-Repo/wallpapers" "$HOME/MasterR/wallpapers"; do
+			if [ -d "$c" ]; then wpdir="$c"; break; fi
+		done
+	fi
+	[ -n "$wpdir" ] || wpdir="$HOME/Pictures/Wallpapers"
 	mkdir -p "$wpdir"
 	case "$(printf '%s' "$base" | tr '[:upper:]' '[:lower:]')" in
 		*.webp) dest="$wpdir/$name.png"; magick "$src" "$dest" ;;

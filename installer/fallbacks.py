@@ -253,8 +253,30 @@ def _nerdfont(pkg, family):
     ]
 
 
+def _mpvpaper(pkg, family):
+    """Build mpvpaper from source using meson and ninja."""
+    deps = {
+        "arch": ["meson", "ninja", "mpv", "wlroots"],
+        "debian": ["meson", "ninja-build", "libmpv-dev", "libwlroots-dev", "wayland-protocols"],
+        "fedora": ["meson", "ninja-build", "mpv-libs-devel", "wlroots-devel"],
+        "suse": ["meson", "ninja", "mpv-devel", "wlroots-devel"],
+    }
+    return [
+        {"desc": "install build deps for mpvpaper",
+         "run": _pm_install_many(family, deps.get(family, deps["arch"]))},
+        _clone_step("no mpvpaper package here, clone the source",
+                    "https://github.com/GhostNaN/mpvpaper", "mpvpaper"),
+        {"desc": "build mpvpaper with meson and ninja",
+         "shell": _in_build("mpvpaper", "meson setup build && ninja -C build")},
+        {"desc": "install mpvpaper binary",
+         "shell": _in_build("mpvpaper", "sudo ninja -C build install")},
+    ]
+
+
 def _github(pkg, family):
-    """Pull the Bibata-Modern-Classic cursor from the latest Bibata release."""
+    """Pull prebuilt assets or build from github."""
+    if pkg.get("id") == "mpvpaper":
+        return _mpvpaper(pkg, family)
     url = ("https://github.com/ful1e5/Bibata_Cursor/releases/latest/download/"
            "Bibata-Modern-Classic.tar.xz")
     return [
@@ -298,6 +320,7 @@ _HANDLERS = {
     "dotool": _dotool,
     "nerdfont": _nerdfont,
     "github": _github,
+    "mpvpaper": _mpvpaper,
     "flatpak": _flatpak,
     "curl": _curl,
 }
@@ -322,13 +345,18 @@ def present(fallback_id, pkg):
     or a failed probe reads as absent, which only costs a redundant install.
     """
     try:
-        if fallback_id in ("cargo", "ghostty", "dotool", "curl"):
+        if fallback_id in ("cargo", "ghostty", "dotool", "curl", "mpvpaper"):
             return shutil.which(pkg["id"]) is not None
         if fallback_id == "nerdfont":
             font_dir = Path(FONT_DIR)
             return font_dir.is_dir() and any(font_dir.glob("JetBrainsMono*"))
         if fallback_id == "github":
-            return os.path.isdir(os.path.join(ICON_DIR, "Bibata-Modern-Classic"))
+            if pkg.get("id") == "mpvpaper":
+                return shutil.which("mpvpaper") is not None
+            return (os.path.isdir(os.path.join(ICON_DIR, "Bibata-Modern-Classic")) or
+                    os.path.isdir(os.path.join(ICON_DIR, "Bibata-Modern-Ice")) or
+                    os.path.isdir("/usr/share/icons/Bibata-Modern-Classic") or
+                    os.path.isdir("/usr/share/icons/Bibata-Modern-Ice"))
         if fallback_id == "flatpak":
             r = subprocess.run(["flatpak", "info", "--user", pkg["flatpak_id"]],
                                capture_output=True)

@@ -22,7 +22,7 @@ import os
 import shlex
 import subprocess
 
-THEME = "torii"
+THEME = "masterr-glass"
 GRUB_ROOT = "/boot/grub"
 THEME_DEST = f"{GRUB_ROOT}/themes/{THEME}"
 THEME_TXT = f"{THEME_DEST}/theme.txt"
@@ -33,13 +33,16 @@ GRUB_CFG = f"{GRUB_ROOT}/grub.cfg"
 
 def _plan(source):
     """The three actions, as (desc, cmd) pairs, with no side effects."""
-    theme_src = os.path.join(source, "grub", "themes", THEME)
+    theme_name = THEME if os.path.exists(os.path.join(source, "grub", "themes", THEME)) else "torii"
+    theme_src = os.path.join(source, "grub", "themes", theme_name)
+    theme_dest = f"{GRUB_ROOT}/themes/{theme_name}"
+    theme_txt = f"{theme_dest}/theme.txt"
 
     copy = (
-        f"Copy the torii GRUB theme to {THEME_DEST}",
+        f"Copy the {theme_name} GRUB theme to {theme_dest}",
         ["sudo", "sh", "-c",
          f"mkdir -p {shlex.quote(GRUB_ROOT)}/themes "
-         f"&& cp -rT {shlex.quote(theme_src)} {shlex.quote(THEME_DEST)}"],
+         f"&& cp -rT {shlex.quote(theme_src)} {shlex.quote(theme_dest)}"],
     )
 
     # Back up the original grub default once (cp -n never clobbers an earlier
@@ -49,8 +52,8 @@ def _plan(source):
         ["sudo", "sh", "-c",
          f'cp -n {shlex.quote(GRUB_DEFAULT)} {shlex.quote(GRUB_BACKUP)} 2>/dev/null || true; '
          f'if grep -q "^GRUB_THEME=" {shlex.quote(GRUB_DEFAULT)} 2>/dev/null; then '
-         f'sed -i \'s|^GRUB_THEME=.*|GRUB_THEME="{THEME_TXT}"|\' {shlex.quote(GRUB_DEFAULT)}; '
-         f'else printf \'\\nGRUB_THEME="{THEME_TXT}"\\n\' >> {shlex.quote(GRUB_DEFAULT)}; fi'],
+         f'sed -i \'s|^GRUB_THEME=.*|GRUB_THEME="{theme_txt}"|\' {shlex.quote(GRUB_DEFAULT)}; '
+         f'else printf \'\\nGRUB_THEME="{theme_txt}"\\n\' >> {shlex.quote(GRUB_DEFAULT)}; fi'],
     )
 
     regen = (

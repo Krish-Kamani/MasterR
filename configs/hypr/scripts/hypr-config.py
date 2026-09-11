@@ -12,7 +12,12 @@ import sys
 from pathlib import Path
 
 CONFIG_DIR = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "hypr" / "modules"
-REPO_CONFIG_DIR = Path.home() / "MasterR" / "configs" / "hypr" / "modules"
+REPO_CANDIDATES = [
+    Path.home() / "DEV" / "Masterr-Repo" / "configs" / "hypr" / "modules",
+    Path.home() / "MasterR" / "configs" / "hypr" / "modules",
+    Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "masterr" / "configs" / "hypr" / "modules",
+]
+REPO_CONFIG_DIR = next((p for p in REPO_CANDIDATES if p.is_dir()), REPO_CANDIDATES[0])
 
 DECORATION_FILE = CONFIG_DIR / "decoration.lua"
 REPO_DECORATION_FILE = REPO_CONFIG_DIR / "decoration.lua"

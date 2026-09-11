@@ -103,8 +103,12 @@ download() {
 
     flags="${XDG_STATE_HOME:-$HOME/.local/state}/masterr/flags.json"
     wpdir=$(jq -r '.wallpaperDir // ""' "$flags" 2>/dev/null || echo "")
-    [ -n "$wpdir" ] || wpdir=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/masterr-wallpaper-dir" 2>/dev/null || true)
-    [ -n "$wpdir" ] || wpdir="$HOME/MasterR/wallpapers"
+    if [ -z "$wpdir" ] || [ ! -d "$wpdir" ]; then
+        for c in "$HOME/Pictures/Wallpapers" "$HOME/Pictures/wallpapers" "${XDG_DATA_HOME:-$HOME/.local/share}/masterr/wallpapers" "$HOME/DEV/Masterr-Repo/wallpapers" "$HOME/MasterR/wallpapers"; do
+            if [ -d "$c" ]; then wpdir="$c"; break; fi
+        done
+    fi
+    [ -n "$wpdir" ] || wpdir="$HOME/Pictures/Wallpapers"
     dir="$wpdir/downloads"
     mkdir -p "$dir"
 

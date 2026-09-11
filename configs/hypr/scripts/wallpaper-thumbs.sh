@@ -5,7 +5,12 @@ export MAGICK_CONFIGURE_PATH
 flags="${XDG_STATE_HOME:-$HOME/.local/state}/masterr/flags.json"
 wpdir=$(jq -r '.wallpaperDir // ""' "$flags" 2>/dev/null || echo "")
 [ -n "$wpdir" ] || wpdir=$(cat "${XDG_STATE_HOME:-$HOME/.local/state}/masterr-wallpaper-dir" 2>/dev/null || true)
-[ -n "$wpdir" ] || wpdir="$HOME/MasterR/wallpapers"
+if [ -z "$wpdir" ] || [ ! -d "$wpdir" ]; then
+    for c in "$HOME/Pictures/Wallpapers" "$HOME/Pictures/wallpapers" "${XDG_DATA_HOME:-$HOME/.local/share}/masterr/wallpapers" "$HOME/DEV/Masterr-Repo/wallpapers" "$HOME/MasterR/wallpapers"; do
+        if [ -d "$c" ]; then wpdir="$c"; break; fi
+    done
+fi
+[ -n "$wpdir" ] && [ -d "$wpdir" ] || exit 0
 cache="${XDG_CACHE_HOME:-$HOME/.cache}/masterr-wp-thumbs"
 mkdir -p "$cache"
 

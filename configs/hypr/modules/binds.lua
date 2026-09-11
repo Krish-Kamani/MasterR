@@ -5,7 +5,7 @@ local mod = "SUPER"
 -- ============================================================================
 hl.bind(mod .. " + Return",         hl.dsp.exec_cmd("ghostty"))                                       -- [Apps] Terminal
 hl.bind(mod .. " + E",              hl.dsp.exec_cmd("dolphin"))                                       -- [Apps] File Manager
-hl.bind(mod .. " + B",              hl.dsp.exec_cmd("prime-run zen-browser"))                         -- [Apps] Zen Web Browser
+hl.bind(mod .. " + B",              hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/hybrid-launch.sh browser"))         -- [Apps] Web Browser (Zen / Fallback)
 hl.bind(mod .. " + SHIFT + C",       hl.dsp.exec_cmd("hyprpicker -a"))                                 -- [Apps] Color Picker
 hl.bind(mod .. " + I",               hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/masterr-settings"))  -- [Apps] MasterR Settings
 
@@ -99,7 +99,7 @@ hl.bind("XF86AudioPrev",             hl.dsp.global("quickshell:mediaPrev"),     
 hl.bind(mod .. " + Escape",          hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/open-surface.sh power"))     -- [System] Power Menu
 hl.bind(mod .. " + L",               hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/lock.sh"))                   -- [System] Lock Screen
 hl.bind(mod .. " + SHIFT + R",       hl.dsp.exec_cmd("hyprctl reload"))                                                       -- [System] Reload Hyprland Config
-hl.bind(mod .. " + X", hl.dsp.exec_cmd("prime-run prismlauncher")) -- [Apps] MINECRAFT
+hl.bind(mod .. " + X",               hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/hybrid-launch.sh prismlauncher"))   -- [Apps] PrismLauncher Minecraft
 
 -- ============================================================================
 -- LIQUID GLASS TOGGLE
@@ -110,4 +110,4 @@ hl.bind(mod .. " + KP_Add",          hl.dsp.exec_cmd(os.getenv("HOME") .. "/.con
 hl.bind(mod .. " + SHIFT + equal",   hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh on"))       -- [Glass] Turn Liquid Glass ON (Super + Shift + =)
 hl.bind(mod .. " + minus",           hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh off"))      -- [Glass] Turn Liquid Glass OFF (Super + -)
 hl.bind(mod .. " + KP_Subtract",     hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/liquid-glass.sh off"))      -- [Glass] Turn Liquid Glass OFF (Numpad -)
-hl.bind(mod .. " + C", hl.dsp.exec_cmd("prime-run vscodium")) -- [Apps] VSCODIUM IDE
+hl.bind(mod .. " + C",               hl.dsp.exec_cmd(os.getenv("HOME") .. "/.config/hypr/scripts/hybrid-launch.sh editor"))          -- [Apps] VSCodium / VS Code IDE

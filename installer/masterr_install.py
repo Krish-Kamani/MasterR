@@ -177,7 +177,7 @@ def _wizard(args, info, manifest):
     sddm = True if args.sddm else False
     if not args.sddm and _has_display_manager():
         sddm = tui.confirm("SDDM login theme", [
-            "Install the torii SDDM login theme. (Recommended)",
+            "Install the MasterR SDDM login theme. (Recommended)",
             "A system change that needs sudo.",
         ])
 
@@ -301,7 +301,7 @@ def _summary_lines(info, choices, plan, args, do_pkgs):
             names = ", ".join(sorted({h for _, h, _ in plan["fallbacks"]}))
             lines.append("Build via fallback: " + names + ".")
     if choices["sddm"]:
-        lines.append("Install the torii SDDM login theme.")
+        lines.append("Install the MasterR SDDM login theme.")
     if choices["grub"]:
         lines.append("Install the GRUB theme.")
     if choices["brave"]:
@@ -328,38 +328,50 @@ def _is_update(info):
 
 def seed_wallpapers(dry):
     """
-    Give a fresh box a wallpaper to show. Every wallpaper consumer reads
-    ~/MasterR/wallpapers (wallpaper.sh, the picker, the search, the palette), but
-    that dir is gitignored and untracked, so a clone ships none: no background, an
-    empty picker, the palette never fires. Create the dir plus the downloads
-    subfolder and the masterr cache, and when it holds no images yet, copy the
-    tracked starter set in so swww, the picker and the palette all light up.
-    Fail-soft like every other step: an OSError comes back as (ok, detail) for
-    the report instead of aborting the run.
+    Give a fresh box wallpapers to show. Seeds wallpapers into ~/Pictures/Wallpapers
+    and creates compatibility symlink ~/MasterR/wallpapers -> ~/Pictures/Wallpapers.
+    Copies both images and video wallpapers (.mp4) from the repository so animated
+    wallpapers, the picker, search and palette all light up immediately.
     """
     home = Path.home()
-    wp = home / "MasterR" / "wallpapers"
+    target_wp = home / "Pictures" / "Wallpapers"
+    compat_wp = home / "MasterR" / "wallpapers"
     starters = Path(__file__).resolve().parent / "starter-wallpapers"
+    repo_wallpapers = Path(__file__).resolve().parent.parent / "wallpapers"
+    assets_wallpapers = Path(__file__).resolve().parent.parent / "assets" / "wallpapers"
     if dry:
-        print("  would seed wallpapers -> ~/MasterR/wallpapers")
+        print("  would seed wallpapers -> ~/Pictures/Wallpapers (and ~/MasterR/wallpapers)")
         return True, ""
     try:
-        (wp / "downloads").mkdir(parents=True, exist_ok=True)
+        target_wp.mkdir(parents=True, exist_ok=True)
+        (target_wp / "downloads").mkdir(parents=True, exist_ok=True)
         (home / ".cache" / "masterr").mkdir(parents=True, exist_ok=True)
-        exts = (".jpg", ".jpeg", ".png")
-        has_image = any(p.is_file() and p.suffix.lower() in exts for p in wp.iterdir())
-        if has_image:
-            print(f"  wallpapers already present -> {wp}")
+
+        # Create compatibility symlink if ~/MasterR/wallpapers does not exist
+        if not compat_wp.exists() and not compat_wp.is_symlink():
+            try:
+                compat_wp.parent.mkdir(parents=True, exist_ok=True)
+                compat_wp.symlink_to(target_wp)
+            except OSError:
+                pass
+
+        exts = (".jpg", ".jpeg", ".png", ".mp4", ".gif")
+        has_media = any(p.is_file() and p.suffix.lower() in exts for p in target_wp.iterdir())
+        if has_media:
+            print(f"  wallpapers already present -> {target_wp}")
             return True, ""
-        if not starters.is_dir():
-            print(f"  no starter wallpapers to seed at {starters}")
-            return True, ""
+
         seeded = 0
-        for src in sorted(starters.iterdir()):
-            if src.is_file() and src.suffix.lower() in exts:
-                shutil.copy2(src, wp / src.name)
-                seeded += 1
-        print(f"  seeded {seeded} starter wallpaper(s) -> {wp}")
+        sources = [starters, repo_wallpapers, assets_wallpapers]
+        for src_dir in sources:
+            if src_dir.is_dir():
+                for src in sorted(src_dir.iterdir()):
+                    if src.is_file() and src.suffix.lower() in exts:
+                        dest = target_wp / src.name
+                        if not dest.exists():
+                            shutil.copy2(src, dest)
+                            seeded += 1
+        print(f"  seeded {seeded} wallpaper(s) -> {target_wp}")
         return True, ""
     except OSError as exc:
         return False, f"{exc}: seed wallpapers"
@@ -413,10 +425,14 @@ def link_masterr_cli(dry):
     settings_target = scripts / "masterr-settings"
     link = Path.home() / ".local" / "bin" / "masterr"
     settings_link = Path.home() / ".local" / "bin" / "masterr-settings"
+    fixer_src = Path(__file__).resolve().parent / "auto-app-icon-fixer"
+    fixer_dest = Path.home() / ".local" / "bin" / "auto-app-icon-fixer"
     if dry:
         print(f"  would link: masterr -> {target}")
         if settings_target.exists():
             print(f"  would link: masterr-settings -> {settings_target}")
+        if fixer_src.is_file():
+            print(f"  would deploy: auto-app-icon-fixer -> {fixer_dest}")
         return True, "", False
     if not target.exists():
         return True, "", False
@@ -431,6 +447,13 @@ def link_masterr_cli(dry):
                 settings_link.unlink()
             settings_link.symlink_to(settings_target)
             print(f"  linked: masterr-settings -> {settings_target}")
+
+        if fixer_src.is_file():
+            if fixer_dest.is_symlink() or fixer_dest.exists():
+                fixer_dest.unlink()
+            shutil.copy2(fixer_src, fixer_dest)
+            fixer_dest.chmod(0o755)
+            print(f"  deployed: auto-app-icon-fixer -> {fixer_dest}")
 
         desktop_src = deploy.CONFIG_ROOT / "quickshell" / "settings" / "masterr-settings.desktop"
         if desktop_src.is_file():
@@ -809,17 +832,27 @@ def run(args):
             notes.append("Linked the masterr CLI into ~/.local/bin. With it on PATH "
                          "you can run: masterr status, masterr restart, masterr update.")
 
-        # l. seed a starter wallpaper so the first boot has a background, a
-        #    populated picker and a palette to render.
+        # k3. enable user services if running under systemd.
+        if info["init"] == "systemd":
+            _run(["systemctl", "--user", "daemon-reload"], dry)
+            ok, detail = _run(
+                ["systemctl", "--user", "enable", "--now", "auto-app-icon-fixer.service"], dry)
+            record(ok, detail, "Enable auto-app-icon-fixer",
+                   "Run: systemctl --user enable --now auto-app-icon-fixer.service")
+
+        # l. seed starter wallpapers and video wallpapers so the first boot has
+        #    a background, a populated picker, animated wallpapers and a palette to render.
         ok, detail = seed_wallpapers(dry)
         record(ok, detail, "Seed wallpapers",
-               "Copy any image into ~/MasterR/wallpapers yourself.")
+               "Copy any image into ~/Pictures/Wallpapers or ~/MasterR/wallpapers yourself.")
 
         # m. themes.
         if choices["sddm"]:
-            sddm_installer = os.path.join(args.source, "sddm", "themes", "torii", "install.sh")
+            sddm_glass = os.path.join(args.source, "sddm", "themes", "masterr-glass", "install.sh")
+            sddm_torii = os.path.join(args.source, "sddm", "themes", "torii", "install.sh")
+            sddm_installer = sddm_glass if os.path.isfile(sddm_glass) else sddm_torii
             if os.path.isfile(sddm_installer):
-                ok, detail = _run(["sh", sddm_installer], dry)
+                ok, detail = _run(["bash", sddm_installer], dry)
                 record(ok, detail, "Install SDDM theme",
                        "Run the SDDM theme installer by hand.")
             else:

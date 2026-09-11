@@ -24,6 +24,30 @@
 
 **MasterR** is a unified, fully customizable desktop environment for **Arch Linux** and **Hyprland** (with multi-distro installer support for Debian/Ubuntu, Fedora, and openSUSE). Unlike traditional setups that cobble together disparate bars, notifications, applets, and menus, the entire UI layer in MasterR is driven by a bespoke, high-performance **Quickshell (QtQuick/QML)** engine.
 
+---
+
+## ⚡ Quick Installation
+
+### 🚀 Automatic Install (Recommended)
+Paste and run this single command on **Arch Linux** (or supported derivatives):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Krish-Kamani/MasterR/main/install.sh | bash
+```
+
+### 🛠️ Manual Installation (Git Clone)
+If you prefer cloning the repository manually:
+```bash
+git clone https://github.com/Krish-Kamani/MasterR.git
+cd MasterR
+./install.sh
+```
+
+> [!TIP]
+> **Advanced Flags & Theme Setup**:  
+> For headless runs (`--quickstart`), dry-run simulation (`--dry-run`), full suite apps (`--full`), or SDDM & GRUB theme setup, jump to the [Detailed Installation & Setup](#-installation--setup) guide below.
+
+---
+
 MasterR pairs bleeding-edge Wayland desktop aesthetics with deep hardware integration:
 * **Zen Browser as Flagship**: First-class privacy and vertical tabs browsing experience with hybrid GPU acceleration (`prime-run zen-browser`).
 * **Instant Liquid Glass Switcher**: On-the-fly switching between specular bevel glass translucency and high-contrast solid mode.
@@ -50,7 +74,7 @@ MasterR comes pre-configured with a carefully selected suite of modern, high-per
 | **Terminal** | **Ghostty** | `SUPER + Return` (`ghostty`) | Blazing-fast GPU-accelerated Wayland terminal with live DBus color palette re-theming and dynamic glass opacity. |
 | **File Manager** | **Dolphin** | `SUPER + E` (`dolphin`) | Powerful KDE file manager fully styled with MasterR dark Material You color schemes. |
 | **Code Editor** | **VSCodium** / **VS Code** | `SUPER + C` (`prime-run vscodium`) | Clean, telemetry-free open-source code editor launched with dedicated GPU graphics acceleration. |
-| **Settings** | **MasterR Settings** | `SUPER + I` (`masterr-settings`) | Comprehensive desktop settings hub controlling every subsystem: Liquid Glass, 4K/video wallpapers, animations, dock, audio mixer, Wi-Fi, Bluetooth, displays, power, keybindings, and AI assistant. |
+| **Gaming** | **PrismLauncher** | `SUPER + X` (`prime-run prismlauncher`) | Open-source, modpack-ready Minecraft launcher with automatic Java management and GPU offload. |
 | **Shell & Info** | **Fish + Fastfetch** | Terminal Startup | Interactive shell with syntax highlighting, custom Torii/MasterR greeting banner, and ASCII lantern hardware splash. |
 
 > [!TIP]
@@ -84,23 +108,6 @@ MasterR features an instant dual-profile rendering engine switchable on the fly:
 ![Liquid Glass vs Solid Mode](assets/features/liquid_glass.gif)
 
 </div>
-
----
-
-### ⚙️ MasterR Settings Application (`SUPER + I` or `masterr settings`)
-
-A dedicated, native Quickshell (QtQuick) desktop application offering comprehensive GUI control over every aspect of the setup:
-* **System & Overview (統)**: Live Fastfetch hardware telemetry, watchdog service health controls (Pill, Lock, Daemons), and 1-click configuration snapshots / backups (`backup-restore.sh`).
-* **Appearance & Theme (外)**: Liquid Glass vs Solid mode switcher, 360° interactive Material You Hue spectrum wheel, dynamic palette synchronization toggles (SDDM, GRUB, Ghostty, Satty, GTK, Fastfetch), UI font picker, and 12h/24h clock styling.
-* **Wallpapers & Live Video (壁)**: High-resolution visual gallery of both Live MP4 Video Wallpapers and 4K Ultra-HD Stills, instant wallpaper application, multi-monitor randomizer targeting, and folder resolution.
-* **Windows & Hyprland (窓)**: Fine-grained sliders for active/inactive window opacity, corner rounding radius, specular borders, inner/outer gaps, dual-pass Kawase blur passes/size, drop shadows, and Dwindle vs Master layouts.
-* **Motion & Physics (動)**: Global animations toggle, 5 tuned motion presets (`spunky`, `fluidSpring`, `smoothFade`, `bouncy`, `snappy`), and spring stiffness/damping controls.
-* **Pill Top Bar (丸)**: Status pill UI scaling factor, screen edge top margins, window gap padding, and module visibility toggles.
-* **Smart Dock (桟)**: Dock master switch, pin modes (Always Pinned, Smart Pin on empty desktop, Auto-Hide on hover), dimensions, monochrome Material You icons toggle, and interactive pinned apps manager.
-* **Displays & Night Light (画)**: Real-time connected monitor resolution, refresh rate, fractional scaling, rotation, and blue-light warmth control (`hyprsunset`).
-* **Input & Gestures (入)**: Mouse pointer sensitivity, acceleration profile (Adaptive vs Flat), natural scrolling, touchpad tap-to-click, and keyboard repeat timing.
-* **Keybindings (鍵)**: Full searchable keybinding matrix parsed live from `binds.lua`, category filtering, and custom shortcut additions.
-* **Sound, Network, Power & AI (音/接/電/知)**: PipeWire output/mic faders, Cava audio visualizer, Wi-Fi and Bluetooth management, ACPI power profiles, laptop fan speed modes (`fan-speed.sh`), hypridle sleep timers, lockscreen preview, and multi-provider AI assistant settings.
 
 ---
 

@@ -14,12 +14,14 @@ hl.config({
         },
     },
     cursor = {
-        no_hardware_cursors = true,
+        no_hardware_cursors = false,
     },
     binds = {
         scroll_event_delay = 40,
     },
     gestures = {
+        workspace_swipe = true,
+        workspace_swipe_fingers = 3,
         workspace_swipe_distance = 300,
         workspace_swipe_cancel_ratio = 0.5,
         workspace_swipe_create_new = true,

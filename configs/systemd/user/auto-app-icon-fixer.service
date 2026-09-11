@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/home/krish_kamani/.local/bin/auto-app-icon-fixer --auto --wait-for-network 180
+ExecStart=%h/.local/bin/auto-app-icon-fixer --auto --wait-for-network 180
 StandardOutput=journal
 StandardError=journal
 

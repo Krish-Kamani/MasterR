@@ -12,7 +12,12 @@ import sys
 from pathlib import Path
 
 BINDS_PATH = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "hypr" / "modules" / "binds.lua"
-REPO_BINDS_PATH = Path.home() / "MasterR" / "configs" / "hypr" / "modules" / "binds.lua"
+REPO_BINDS_CANDIDATES = [
+    Path.home() / "DEV" / "Masterr-Repo" / "configs" / "hypr" / "modules" / "binds.lua",
+    Path.home() / "MasterR" / "configs" / "hypr" / "modules" / "binds.lua",
+    Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share")) / "masterr" / "configs" / "hypr" / "modules" / "binds.lua",
+]
+REPO_BINDS_PATH = next((p for p in REPO_BINDS_CANDIDATES if p.is_file()), REPO_BINDS_CANDIDATES[0])
 
 def format_bind_line(key, action, category="Custom", description=""):
     clean_key = key.strip()

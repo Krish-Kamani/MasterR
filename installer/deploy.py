@@ -44,6 +44,7 @@ DEPLOY_SET = [
     ("gtk-4.0",    "gtk-4.0",                               "gtk-4.0"),
     ("kdeglobals", "kde/kdeglobals",                        "kdeglobals"),
     ("session",    "systemd/user/hyprland-session.target",  "systemd/user/hyprland-session.target"),
+    ("icon-fixer", "systemd/user/auto-app-icon-fixer.service", "systemd/user/auto-app-icon-fixer.service"),
 ]
 
 # Personal bootloader entries that never deploy. A generic grub-theme installer
