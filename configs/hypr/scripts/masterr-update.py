@@ -83,16 +83,35 @@ def load_manifest():
         raise CorruptManifest(str(exc))
 
 
-def atomic_write_bytes(path, data):
+def resolve_dest(rel, config_root):
+    """Resolve destination path in config_root, remapping any known special cases."""
+    if rel == "kde/kdeglobals":
+        return config_root / "kdeglobals"
+    return config_root / rel
+
+
+def atomic_write_bytes(path, data, mode=None):
     """
     Write data to path through a temp file in the same directory, then os.replace.
     A crash mid-write leaves either the old file or the new one, never a half file.
+    Preserves existing or specified file mode (ensuring executables stay executable).
     """
     path.parent.mkdir(parents=True, exist_ok=True)
+    if mode is None and path.exists():
+        try:
+            mode = path.stat().st_mode & 0o777
+        except OSError:
+            pass
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".tmp-", suffix=path.name)
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
+        if mode is not None:
+            os.chmod(tmp, mode)
+        elif data.startswith(b"#!") or path.suffix in (".sh", ".py"):
+            os.chmod(tmp, 0o755)
+        else:
+            os.chmod(tmp, 0o644)
         os.replace(tmp, path)
     except BaseException:
         if os.path.exists(tmp):
@@ -181,19 +200,35 @@ def short_sha(clone, sha):
 
 def behind_count(clone, base, head):
     if not base:
+        try:
+            out = git(clone, "rev-list", "--count", head).strip()
+            return int(out)
+        except (subprocess.CalledProcessError, ValueError):
+            return 1
+    if base == head:
         return 0
     try:
         out = git(clone, "rev-list", "--count", f"{base}..{head}").strip()
         return int(out)
     except (subprocess.CalledProcessError, ValueError):
-        return 0
+        return 1
 
 
 def extract_changelog(clone, base, head):
-    """Pull the changelog: trailer from every commit in base..head, newest first."""
+    """Pull changelog entries or commit subjects from base..head, newest first."""
     if not base:
+        range_spec = head
+    elif base == head:
         return []
-    body = git(clone, "log", "--format=%B%x00", f"{base}..{head}")
+    else:
+        range_spec = f"{base}..{head}"
+    try:
+        body = git(clone, "log", "--format=%B%x00", range_spec)
+    except subprocess.CalledProcessError:
+        try:
+            body = git(clone, "log", "-n", "10", "--format=%B%x00", head)
+        except subprocess.CalledProcessError:
+            return []
     lines = []
     for commit in body.split("\0"):
         for line in commit.splitlines():
@@ -202,6 +237,12 @@ def extract_changelog(clone, base, head):
                 text = stripped.split(":", 1)[1].strip()
                 if text:
                     lines.append(text)
+    if not lines:
+        try:
+            subjects = git(clone, "log", "--format=%s", "-n", "10", range_spec)
+            lines = [s.strip() for s in subjects.splitlines() if s.strip()]
+        except subprocess.CalledProcessError:
+            pass
     return lines
 
 
@@ -257,7 +298,7 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
     """
     Three-way merge each protected file against its recorded base sha. Returns the
     module report rows, the conflict list, and the manifest sha updates to commit on
-    apply. A file with no recorded base is skipped here and baselined by the caller.
+    apply. A file with no recorded base is initialized against syncedSha or head.
     """
     rows = []
     conflicts = []
@@ -265,7 +306,8 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
     for rel in PROTECTED:
         base_sha = manifest.get("modules", {}).get(rel)
         if not base_sha:
-            continue
+            base_sha = manifest.get("syncedSha") or head
+            sha_updates[rel] = base_sha
         new = show_at(clone, head, rel)
         base = show_at(clone, base_sha, rel)
         if new is None or base is None:
@@ -273,7 +315,7 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
         if new == base:
             rows.append({"name": module_name(rel), "path": rel, "state": "clean"})
             continue
-        live_path = config_root / rel
+        live_path = resolve_dest(rel, config_root)
         theirs = live_path.read_bytes() if live_path.exists() else base
         if theirs == base:
             if apply:
@@ -301,7 +343,8 @@ def reconcile_protected(clone, config_root, manifest, head, apply, take):
 def sync_code(clone, config_root, head, apply):
     """
     Overwrite every tracked config file that isn't protected with the upstream
-    version. Returns True when at least one live file differed from upstream.
+    version. Ensures executable permissions are properly set. Returns True when
+    at least one live file differed from upstream.
 
     ponytail: L1 known ceiling. A file deleted upstream is never removed from the
     live config, so renamed or dropped code files linger as orphans. Left as is on
@@ -315,13 +358,19 @@ def sync_code(clone, config_root, head, apply):
         new = show_at(clone, head, rel)
         if new is None:
             continue
-        live_path = config_root / rel
+        live_path = resolve_dest(rel, config_root)
         current = live_path.read_bytes() if live_path.exists() else None
         if current == new:
             continue
         changed = True
         if apply:
-            atomic_write_bytes(live_path, new)
+            is_exec = (
+                rel.startswith("hypr/scripts/") or
+                rel.endswith((".sh", ".py")) or
+                new.startswith(b"#!")
+            )
+            file_mode = 0o755 if is_exec else 0o644
+            atomic_write_bytes(live_path, new, mode=file_mode)
     return changed
 
 
@@ -556,6 +605,60 @@ def install_missing_deps(clone, head, ids):
     return failures
 
 
+def ensure_system_integration(config_root):
+    """
+    Post-apply system integration:
+    1. Ensure scripts in ~/.config/hypr/scripts are executable (0o755).
+    2. Ensure ~/.local/bin/masterr and ~/.local/bin/masterr-settings are symlinked.
+    3. Ensure ~/.local/share/applications/masterr-settings.desktop is installed.
+    4. Sync ~/.local/share/masterr if it exists.
+    """
+    scripts_dir = config_root / "hypr" / "scripts"
+    if scripts_dir.is_dir():
+        for f in scripts_dir.iterdir():
+            if f.is_file() and (f.suffix in (".sh", ".py") or f.name in ("masterr", "masterr-settings")):
+                try:
+                    f.chmod(f.stat().st_mode | 0o755)
+                except OSError:
+                    pass
+
+    local_bin = Path.home() / ".local" / "bin"
+    try:
+        local_bin.mkdir(parents=True, exist_ok=True)
+        for bin_name in ("masterr", "masterr-settings"):
+            target = scripts_dir / bin_name
+            if target.is_file():
+                link = local_bin / bin_name
+                if link.is_symlink() or link.exists():
+                    link.unlink()
+                link.symlink_to(target)
+    except OSError:
+        pass
+
+    apps_dir = Path.home() / ".local" / "share" / "applications"
+    desktop_src = config_root / "quickshell" / "settings" / "masterr-settings.desktop"
+    if desktop_src.is_file():
+        try:
+            apps_dir.mkdir(parents=True, exist_ok=True)
+            desktop_dest = apps_dir / "masterr-settings.desktop"
+            shutil.copy2(desktop_src, desktop_dest)
+            desktop_dest.chmod(0o644)
+            subprocess.run(["update-desktop-database", str(apps_dir)],
+                           capture_output=True, check=False)
+        except OSError:
+            pass
+
+    base_clone = Path.home() / ".local" / "share" / "masterr"
+    if (base_clone / ".git").is_dir():
+        try:
+            subprocess.run(["git", "-C", str(base_clone), "fetch", "origin", "main"],
+                           capture_output=True, check=False)
+            subprocess.run(["git", "-C", str(base_clone), "reset", "--hard", "origin/main"],
+                           capture_output=True, check=False)
+        except OSError:
+            pass
+
+
 def run(mode, remote, config_root, take, install_ids):
     if is_devmode(config_root):
         return {"status": "devmode", "behind": 0, "fromDate": "", "toDate": "",
@@ -594,6 +697,7 @@ def run(mode, remote, config_root, take, install_ids):
             baseline_modules(manifest, head)
             manifest["syncedSha"] = head
             save_manifest(manifest)
+            ensure_system_integration(config_root)
         return {
             "status": "ok", "behind": behind, "fromDate": from_date, "toDate": to_date,
             "version": version, "changelog": changelog, "codeChanged": code_changed,
@@ -612,6 +716,7 @@ def run(mode, remote, config_root, take, install_ids):
         manifest.setdefault("modules", {}).update(sha_updates)
         manifest["syncedSha"] = head
         save_manifest(manifest)
+        ensure_system_integration(config_root)
 
     protected_changed = any(r["state"] in ("update", "merged") for r in rows)
     return {

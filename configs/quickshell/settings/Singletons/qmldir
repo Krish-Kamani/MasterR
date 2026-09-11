@@ -1,0 +1,6 @@
+singleton Theme Theme.qml
+singleton Dyn Dyn.qml
+singleton Flags Flags.qml
+singleton Motion Motion.qml
+singleton Walls Walls.qml
+singleton Nav Nav.qml

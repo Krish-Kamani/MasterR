@@ -1,0 +1,21 @@
+[Desktop Entry]
+Name=Settings
+GenericName=MasterR Settings
+Comment=Configure all aspects of the MasterR desktop environment
+Exec=masterr-settings
+Icon=preferences-system
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;Qt;
+Keywords=Settings;Preferences;Hyprland;MasterR;Theme;Audio;Display;Wallpapers;
+StartupNotify=true
+StartupWMClass=quickshell
+Actions=LiquidGlass;SolidMode;
+
+[Desktop Action LiquidGlass]
+Name=Switch to Liquid Glass Mode
+Exec=bash -c "~/.config/hypr/scripts/liquid-glass.sh on"
+
+[Desktop Action SolidMode]
+Name=Switch to Solid Mode
+Exec=bash -c "~/.config/hypr/scripts/liquid-glass.sh off"

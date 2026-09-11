@@ -31,13 +31,13 @@ hl.config({
         ["col.inactive_border"] = inactive_glass,
     },
     decoration = {
-        rounding         = 20,
+        rounding         = 16,
         rounding_power   = 4,
-        active_opacity   = 0.88,
-        inactive_opacity = 0.48,
+        active_opacity   = 0.90,
+        inactive_opacity = 0.65,
         shadow = {
             enabled      = true,
-            range        = 32,
+            range        = 24,
             render_power = 4,
             color        = 0x66000000,
         },

@@ -270,6 +270,8 @@ elif [ "$cmd" = "set" ]; then
     [ -f "$pic" ] || exit 1
     target="${3:-}"
     [ "$target" = "all" ] && target=""
+    [ "$target" = "focused" ] && target=$(focused_output)
+    [ "$target" = "cursor" ] && target=$(cursor_output)
 else
     scope=$(jq -r '.randomScope // "all"' "$flags_file" 2>/dev/null || echo all)
     if [ "$scope" = "cursor" ]; then

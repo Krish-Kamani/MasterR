@@ -195,6 +195,23 @@ def main():
     assert corrupt["modules"] == [] and corrupt["behind"] == 0, "must not masquerade as first run"
     print("M1 corrupt manifest -> error, not first run: ok")
 
+    """
+    P1: script files updated by atomic_write_bytes / sync_code must remain executable (mode & 0o111 != 0).
+    """
+    script_path = config / "hypr/scripts/test.sh"
+    ru.atomic_write_bytes(script_path, b"#!/bin/sh\necho test\n", mode=0o755)
+    assert script_path.stat().st_mode & 0o111 != 0, "script must be executable"
+    ru.atomic_write_bytes(script_path, b"#!/bin/sh\necho updated\n")
+    assert script_path.stat().st_mode & 0o111 != 0, "script update must preserve executable mode"
+    print("P1 script executable mode preserved: ok")
+
+    """
+    P2: commit subject fallback when no changelog: trailer is present.
+    """
+    cl = ru.extract_changelog(origin, "HEAD~2", "HEAD")
+    assert len(cl) > 0, "changelog should fall back to commit subjects"
+    print("P2 commit subject changelog fallback: ok")
+
     print("\nALL TESTS PASSED")
 
 

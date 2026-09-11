@@ -10,6 +10,18 @@ if [ -z "$TARGET" ]; then
     exit 0
 fi
 
+# Check if smooth scrolling is enabled in user flags
+FLAGS_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/masterr/flags.json"
+SMOOTH="true"
+if [ -f "$FLAGS_FILE" ]; then
+    SMOOTH=$(jq -r '.smoothWorkspaceScroll // true' "$FLAGS_FILE" 2>/dev/null || echo "true")
+fi
+
+if [ "$SMOOTH" = "false" ]; then
+    hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = $TARGET }))" >/dev/null 2>&1
+    exit 0
+fi
+
 # Fetch current active workspace ID (JSON with regex fallback)
 CURRENT=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id' 2>/dev/null)
 if [ -z "$CURRENT" ] || ! [[ "$CURRENT" =~ ^-?[0-9]+$ ]]; then
@@ -23,7 +35,7 @@ fi
 
 # Ignore or directly jump if coming from a special scratchpad workspace (ID < 1)
 if [ "$CURRENT" -lt 1 ]; then
-    hyprctl dispatch workspace "$TARGET"
+    hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = $TARGET }))" >/dev/null 2>&1
     exit 0
 fi
 
@@ -32,7 +44,7 @@ ABS_DIFF=${DIFF#-}
 
 # If direct adjacent workspace (e.g. 1 -> 2), direct dispatch
 if [ "$ABS_DIFF" -le 1 ]; then
-    hyprctl dispatch workspace "$TARGET"
+    hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = $TARGET }))" >/dev/null 2>&1
     exit 0
 fi
 
@@ -48,7 +60,7 @@ fi
 # Forward traversal (e.g. 1 -> 5)
 if [ "$TARGET" -gt "$CURRENT" ]; then
     for ((w = CURRENT + 1; w <= TARGET; w++)); do
-        hyprctl dispatch workspace "$w"
+        hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = $w }))" >/dev/null 2>&1
         if [ "$w" -lt "$TARGET" ]; then
             sleep "$DELAY"
         fi
@@ -56,7 +68,7 @@ if [ "$TARGET" -gt "$CURRENT" ]; then
 # Backward traversal (e.g. 5 -> 1)
 else
     for ((w = CURRENT - 1; w >= TARGET; w--)); do
-        hyprctl dispatch workspace "$w"
+        hyprctl eval "hl.dispatch(hl.dsp.focus({ workspace = $w }))" >/dev/null 2>&1
         if [ "$w" -gt "$TARGET" ]; then
             sleep "$DELAY"
         fi

@@ -404,15 +404,19 @@ def bridge_wallpaper_binary(dry):
 
 def link_masterr_cli(dry):
     """
-    Put the `masterr` control CLI on PATH. The script ships inside the deployed
-    config at ~/.config/hypr/scripts/masterr, so symlink it into ~/.local/bin where
-    the wallpaper bridge already lives. Returns (ok, detail, linked) so the caller
-    folds it into record() and flags the PATH note only when a fresh link was made.
+    Put the `masterr` and `masterr-settings` control CLIs on PATH. The scripts ship
+    inside the deployed config at ~/.config/hypr/scripts, so symlink them into ~/.local/bin
+    where the wallpaper bridge already lives. Also deploys desktop entry.
     """
-    target = deploy.CONFIG_ROOT / "hypr" / "scripts" / "masterr"
+    scripts = deploy.CONFIG_ROOT / "hypr" / "scripts"
+    target = scripts / "masterr"
+    settings_target = scripts / "masterr-settings"
     link = Path.home() / ".local" / "bin" / "masterr"
+    settings_link = Path.home() / ".local" / "bin" / "masterr-settings"
     if dry:
         print(f"  would link: masterr -> {target}")
+        if settings_target.exists():
+            print(f"  would link: masterr-settings -> {settings_target}")
         return True, "", False
     if not target.exists():
         return True, "", False
@@ -421,6 +425,23 @@ def link_masterr_cli(dry):
         if link.is_symlink() or link.exists():
             link.unlink()
         link.symlink_to(target)
+
+        if settings_target.exists():
+            if settings_link.is_symlink() or settings_link.exists():
+                settings_link.unlink()
+            settings_link.symlink_to(settings_target)
+            print(f"  linked: masterr-settings -> {settings_target}")
+
+        desktop_src = deploy.CONFIG_ROOT / "quickshell" / "settings" / "masterr-settings.desktop"
+        if desktop_src.is_file():
+            apps_dir = Path.home() / ".local" / "share" / "applications"
+            apps_dir.mkdir(parents=True, exist_ok=True)
+            desktop_dest = apps_dir / "masterr-settings.desktop"
+            shutil.copy2(desktop_src, desktop_dest)
+            desktop_dest.chmod(0o644)
+            subprocess.run(["update-desktop-database", str(apps_dir)],
+                           capture_output=True, check=False)
+            print(f"  deployed: masterr-settings.desktop -> {desktop_dest}")
     except OSError as exc:
         return False, f"{exc}: link masterr CLI", False
     print(f"  linked: masterr -> {target}")

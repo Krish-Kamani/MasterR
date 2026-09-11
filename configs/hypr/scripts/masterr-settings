@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+#
+# masterr-settings — launcher for the MasterR Settings Application.
+# Checks if the window is already open; if so, focuses it, otherwise launches it.
+#
+
+set -euo pipefail
+
+# Check if an instance is already running under Hyprland
+if command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+    SETTINGS_WIN=$(hyprctl clients -j 2>/dev/null | jq -r '.[] | select(.title == "MasterR Settings" or .class == "masterr-settings") | .address' | head -n1 || true)
+    if [ -n "$SETTINGS_WIN" ]; then
+        hyprctl dispatch focuswindow "address:$SETTINGS_WIN" >/dev/null 2>&1 || true
+        exit 0
+    fi
+fi
+
+# Not currently running: launch quickshell with settings configuration
+if command -v qs >/dev/null 2>&1; then
+    exec qs -c settings
+else
+    echo "Error: 'qs' (quickshell) command not found." >&2
+    exit 1
+fi

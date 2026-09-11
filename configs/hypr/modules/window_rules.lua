@@ -38,6 +38,14 @@ hl.window_rule({
 })
 
 hl.window_rule({
+    name   = "float-masterr-settings",
+    match  = { title = "^(MasterR Settings)$" },
+    float  = true,
+    size   = { 1140, 760 },
+    center = true,
+})
+
+hl.window_rule({
     name  = "float-ghosttype",
     match = { class = "Ghosttype-app" },
     float = true,

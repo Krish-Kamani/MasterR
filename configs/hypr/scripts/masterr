@@ -62,6 +62,7 @@ usage() {
     urow log     "[pill·lock]"     "follow the quickshell log"      "(pill)"
     urow update  ""                "check, then apply an update"     ""
     urow status  ""                "what's running and the version"  ""
+    urow settings ""               "launch MasterR Settings app"     ""
     urow uninstall ""              "remove the configs, restore backups" ""
     gap
 }
@@ -152,21 +153,26 @@ cmd_update() {
     case "$status" in
         devmode) note "dev install, update with git pull"; return 0 ;;
         offline) die "offline, can't reach the update remote" ;;
-        noclone) die "no update clone yet, open the in-app updater once first" ;;
+        noclone) die "could not clone update mirror; check your network and git connection" ;;
         ok) ;;
         *) die "$(printf '%s' "$json" | jq -r '.error // "update check failed"')" ;;
     esac
 
     behind=$(printf '%s' "$json" | jq -r '.behind // 0')
+    code_changed=$(printf '%s' "$json" | jq -r '.codeChanged // false')
     version=$(printf '%s' "$json" | jq -r '.version // ""')
-    if [ "$behind" = 0 ]; then
+    if [ "$behind" = 0 ] && [ "$code_changed" != "true" ]; then
         act "up to date" "$version"
         return 0
     fi
 
     fromd=$(printf '%s' "$json" | jq -r '.fromDate // ""')
     tod=$(printf '%s' "$json" | jq -r '.toDate // ""')
-    sec "$behind commit(s) behind"
+    if [ "$behind" -gt 0 ]; then
+        sec "$behind commit(s) behind"
+    else
+        sec "Updates available"
+    fi
     gap
     row "${faint}$fromd -> $tod${rst}"
     gap
@@ -242,6 +248,7 @@ case "$cmd" in
     log) cmd_log "$@" ;;
     update) cmd_update ;;
     status) cmd_status ;;
+    settings) exec "$SCRIPTS/masterr-settings" ;;
     uninstall) cmd_uninstall "$@" ;;
     "" | -h | --help | help) usage ;;
     *) die "unknown command '$cmd' (try: masterr help)" ;;

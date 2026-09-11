@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 
 import QtQuick
+import Quickshell.Io
 import "Singletons"
 
 /**
@@ -12,6 +13,11 @@ SettingsSurface {
     id: root
 
     implicitHeight: content.implicitHeight
+
+    Process {
+        id: launchSettingsProc
+        command: ["masterr-settings"]
+    }
 
     rows: [
         { item: appearanceRow, kind: "nav", surface: "appearance" },
@@ -38,6 +44,49 @@ SettingsSurface {
             glyph: "設"
             title: "SETTINGS"
         }
+
+        Rectangle {
+            width: parent.width - 24 * root.s
+            height: 36 * root.s
+            anchors.horizontalCenter: parent.horizontalCenter
+            radius: 8 * root.s
+            color: fullBtnMouse.containsMouse ? Qt.rgba(Theme.onGlow.r, Theme.onGlow.g, Theme.onGlow.b, 0.22) : Qt.rgba(Theme.onGlow.r, Theme.onGlow.g, Theme.onGlow.b, 0.10)
+            border.color: fullBtnMouse.containsMouse ? Theme.onGlow : Qt.rgba(Theme.onGlow.r, Theme.onGlow.g, Theme.onGlow.b, 0.28)
+            border.width: 1
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 8 * root.s
+
+                GlyphIcon {
+                    width: 14 * root.s
+                    height: 14 * root.s
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "cog"
+                    color: Theme.bright
+                    stroke: 2.0
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Open Full Settings App (SUPER + I)"
+                    font.family: Flags.uiFont || "Inter"
+                    font.pixelSize: 11 * root.s
+                    font.weight: Font.DemiBold
+                    color: Theme.bright
+                }
+            }
+
+            MouseArea {
+                id: fullBtnMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: launchSettingsProc.running = true
+            }
+        }
+
+        Item { width: parent.width; height: 6 * root.s }
 
         SettingsRow {
             id: appearanceRow
