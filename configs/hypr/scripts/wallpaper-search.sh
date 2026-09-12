@@ -2,9 +2,11 @@
 
 UA="Mozilla/5.0 (X11; Linux x86_64) Gecko/20100101 Firefox/126.0"
 
-search_moewalls() {
-    local query="${1:-}"
-    UA="$UA" python3 - "$query" <<'PYEOF'
+search() {
+    local query="${1:-}" kind="${2:-all}"
+    [ -n "$query" ] || { printf '[]\n'; return 0; }
+
+    UA="$UA" python3 - "$query" "$kind" <<'PYEOF'
 import concurrent.futures
 import json
 import os
@@ -13,95 +15,174 @@ import sys
 import urllib.parse
 import urllib.request
 
-ua = os.environ.get("UA", "Mozilla/5.0")
+query = sys.argv[1].strip() if len(sys.argv) > 1 else ""
+kind = sys.argv[2].strip() if len(sys.argv) > 2 else "all"
 
-def fetch(url, timeout=10):
-    req = urllib.request.Request(url, headers={"User-Agent": ua, "Referer": "https://moewalls.com/"})
+if not query:
+    print("[]")
+    sys.exit(0)
+
+ua = os.environ.get("UA", "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+
+def fetch(url, headers=None, timeout=6):
+    h = {"User-Agent": ua}
+    if headers:
+        h.update(headers)
+    req = urllib.request.Request(url, headers=h)
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return r.read().decode("utf-8", "ignore")
 
-def post_entry(url):
-    html = fetch(url)
-    prev = re.search(r'<source[^>]+src="([^"]+)"', html)
-    if not prev:
-        prev = re.search(r'<video[^>]+src="([^"]+)"', html)
-    token = re.search(r'id="moe-download"[^>]*data-url="([^"]+)"', html)
-    thumb = re.search(r'poster="([^"]+)"', html)
-    if not prev or not token:
-        return None
-    res = re.search(r'resolutions-(\d+)x(\d+)', html)
-    if not res:
-        res = re.search(r'(\d{3,4})\s*[x×]\s*(\d{3,4})', html)
-    return {
-        "image": "https://go.moewalls.com/download.php?video=" + token.group(1),
-        "thumb": urllib.parse.urljoin("https://moewalls.com/", thumb.group(1)) if thumb else "",
-        "preview": urllib.parse.urljoin("https://moewalls.com/", prev.group(1)),
-        "w": int(res.group(1)) if res else 0,
-        "h": int(res.group(2)) if res else 0,
-    }
+def search_wallhaven(q):
+    try:
+        url = f"https://wallhaven.cc/api/v1/search?q={urllib.parse.quote(q)}&sorting=relevance&purity=100"
+        raw = fetch(url, timeout=5)
+        data = json.loads(raw)
+        out = []
+        for item in data.get("data", []):
+            p = item.get("path")
+            if not p:
+                continue
+            thumbs = item.get("thumbs", {})
+            t = thumbs.get("large") or thumbs.get("small") or p
+            out.append({
+                "image": p,
+                "thumb": t,
+                "w": item.get("dimension_x", 0),
+                "h": item.get("dimension_y", 0),
+            })
+        return out
+    except Exception:
+        return []
+
+def search_moewalls(q):
+    def post_entry(url):
+        try:
+            html = fetch(url, headers={"Referer": "https://moewalls.com/"}, timeout=5)
+            prev = re.search(r'<source[^>]+src="([^"]+)"', html)
+            if not prev:
+                prev = re.search(r'<video[^>]+src="([^"]+)"', html)
+            token = re.search(r'id="moe-download"[^>]*data-url="([^"]+)"', html)
+            thumb = re.search(r'poster="([^"]+)"', html)
+            if not prev or not token:
+                return None
+            res = re.search(r'resolutions-(\d+)x(\d+)', html)
+            if not res:
+                res = re.search(r'(\d{3,4})\s*[x×]\s*(\d{3,4})', html)
+            return {
+                "image": "https://go.moewalls.com/download.php?video=" + token.group(1),
+                "thumb": urllib.parse.urljoin("https://moewalls.com/", thumb.group(1)) if thumb else "",
+                "preview": urllib.parse.urljoin("https://moewalls.com/", prev.group(1)),
+                "w": int(res.group(1)) if res else 0,
+                "h": int(res.group(2)) if res else 0,
+            }
+        except Exception:
+            return None
+
+    try:
+        page = fetch("https://moewalls.com/?s=" + urllib.parse.quote(q), headers={"Referer": "https://moewalls.com/"}, timeout=6)
+        posts = []
+        for m in re.finditer(r'href="(https://moewalls\.com/(?!category|tag|resolution|author|page)[a-z0-9-]+/[a-z0-9-]+(?:-live-wallpaper)?/?)"', page):
+            if m.group(1) not in posts:
+                posts.append(m.group(1))
+        out = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+            for entry in ex.map(post_entry, posts[:12]):
+                if entry:
+                    out.append(entry)
+        return out
+    except Exception:
+        return []
+
+def search_ddg(q, k):
+    try:
+        f = "type:photo" if k == "still" else ",,,"
+        html = fetch(f"https://duckduckgo.com/?q={urllib.parse.quote(q)}&iax=images&ia=images", timeout=4)
+        m = re.search(r'vqd="?([0-9-]+)', html)
+        if not m:
+            return []
+        vqd = m.group(1)
+        url2 = f"https://duckduckgo.com/i.js?l=us-en&o=json&q={urllib.parse.quote(q)}&vqd={vqd}&f={f}&p=-1"
+        headers2 = {
+            "Accept": "application/json, text/javascript, */*; q=0.01",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "https://duckduckgo.com/",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "X-Requested-With": "XMLHttpRequest"
+        }
+        raw = fetch(url2, headers=headers2, timeout=4)
+        data = json.loads(raw)
+        results = data.get("results", [])
+        out = []
+        for item in results:
+            img = item.get("image")
+            if not img:
+                continue
+            is_gif = bool(re.search(r'\.gif(\?|$)', img, re.I))
+            if k == "motion" and not is_gif:
+                continue
+            if k == "still" and is_gif:
+                continue
+            out.append({
+                "image": img,
+                "thumb": item.get("thumbnail") or img,
+                "w": item.get("width") or 0,
+                "h": item.get("height") or 0
+            })
+        return out
+    except Exception:
+        return []
 
 try:
-    q = urllib.parse.quote(sys.argv[1])
-    page = fetch("https://moewalls.com/?s=" + q, timeout=12)
-    posts = []
-    for m in re.finditer(r'href="(https://moewalls\.com/(?!category|tag|resolution|author|page)[a-z0-9-]+/[a-z0-9-]+(?:-live-wallpaper)?/?)"', page):
-        if m.group(1) not in posts:
-            posts.append(m.group(1))
-    out = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        for entry in ex.map(post_entry, posts[:24]):
-            if entry:
-                out.append(entry)
-    print(json.dumps(out))
+    if kind == "motion":
+        res = search_moewalls(query)
+        if not res:
+            res = search_ddg(query, "motion")
+        print(json.dumps(res[:60]))
+        sys.exit(0)
+
+    if kind == "all":
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+            f_wh = ex.submit(search_wallhaven, query)
+            f_moe = ex.submit(search_moewalls, query)
+            wh = f_wh.result() or []
+            moe = f_moe.result() or []
+
+        combined = []
+        seen = set()
+        max_len = max(len(wh), len(moe))
+        for i in range(max_len):
+            if i < len(wh) and wh[i]["image"] not in seen:
+                seen.add(wh[i]["image"])
+                combined.append(wh[i])
+            if i < len(moe) and moe[i]["image"] not in seen:
+                seen.add(moe[i]["image"])
+                combined.append(moe[i])
+
+        if len(combined) < 12:
+            ddg = search_ddg(query, "all")
+            for item in ddg:
+                if item["image"] not in seen:
+                    seen.add(item["image"])
+                    combined.append(item)
+
+        print(json.dumps(combined[:60]))
+        sys.exit(0)
+
+    wh = search_wallhaven(query)
+    seen = set(item["image"] for item in wh)
+    if len(wh) < 12:
+        ddg = search_ddg(query, "still")
+        for item in ddg:
+            if item["image"] not in seen:
+                seen.add(item["image"])
+                wh.append(item)
+
+    print(json.dumps(wh[:60]))
 except Exception:
     print("[]")
 PYEOF
-}
-
-search() {
-    local query="${1:-}" kind="${2:-all}"
-    [ -n "$query" ] || { printf '[]\n'; return 0; }
-
-    if [ "$kind" = "motion" ]; then
-        local moe
-        moe=$(search_moewalls "$query") || moe="[]"
-        if [ "$moe" != "[]" ] && [ -n "$moe" ]; then
-            printf '%s\n' "$moe"
-            return 0
-        fi
-    fi
-
-    local q="$query" f=",,,"
-    case "$kind" in
-        still)  f="type:photo" ;;
-    esac
-
-    local enc vqd raw
-    enc=$(jq -rn --arg q "$q" '$q|@uri') || { printf '[]\n'; return 0; }
-
-    vqd=$(curl -s --max-time 10 "https://duckduckgo.com/?q=${enc}&iax=images&ia=images" -A "$UA" \
-        | grep -oP 'vqd=\\?"?\K[0-9-]+' | head -1)
-    [ -n "$vqd" ] || { printf '[]\n'; return 0; }
-
-    raw=$(curl -s --max-time 10 \
-        "https://duckduckgo.com/i.js?l=us-en&o=json&q=${enc}&vqd=${vqd}&f=${f}&p=-1" \
-        -A "$UA" -H "Referer: https://duckduckgo.com/")
-    [ -n "$raw" ] || { printf '[]\n'; return 0; }
-
-    printf '%s' "$raw" | jq -c --arg kind "$kind" '
-        (.results // [])
-        | if $kind == "motion" then map(select(.image // "" | test("\\.gif(\\?|$)"; "i")))
-          elif $kind == "still" then map(select(.image // "" | test("\\.gif(\\?|$)"; "i") | not))
-          else . end
-        | map({
-            image: .image,
-            thumb: (.thumbnail // .image),
-            w: (.width // 0 | if . == null then 0 else . end),
-            h: (.height // 0 | if . == null then 0 else . end)
-          })
-        | map(select(.image != null and .image != ""))
-        | .[0:60]
-    ' 2>/dev/null || printf '[]\n'
 }
 
 download() {
@@ -139,10 +220,10 @@ download() {
             ;;
     esac
 
-    tmp=$(mktemp "${TMPDIR:-/tmp}/ddg-wp.XXXXXX")
+    tmp=$(mktemp "${TMPDIR:-/tmp}/wp-dl.XXXXXX")
     trap 'rm -f "$tmp" "$tmp.out"' EXIT
 
-    curl -fsL --max-time 600 -A "$UA" -e "https://duckduckgo.com/" -o "$tmp" "$url" || exit 1
+    curl -fsL --max-time 600 -A "$UA" -o "$tmp" "$url" || exit 1
     [ -s "$tmp" ] || exit 1
 
     mime=$(file -b --mime-type "$tmp" 2>/dev/null || true)
@@ -156,7 +237,7 @@ download() {
 
     if [ -n "$ext" ]; then
         url_base=$(basename "${url%%\?*}" 2>/dev/null || true)
-        if [[ "$url_base" == *.* && "$url_base" != *"="* ]]; then
+        if [[ "$url_base" =~ ^[a-zA-Z0-9_.-]+$ ]] && [[ "$url_base" == *.* ]]; then
             fn_base="${url_base%.*}"
             out="$dir/${fn_base}.${ext}"
         else
@@ -181,7 +262,13 @@ download() {
         *)    ext=png ;;
     esac
 
-    out="$dir/ddg-$(date +%s)-${RANDOM}.${ext}"
+    url_base=$(basename "${url%%\?*}" 2>/dev/null || true)
+    if [[ "$url_base" =~ ^[a-zA-Z0-9_.-]+$ ]] && [[ "$url_base" == *.* ]]; then
+        fn_base="${url_base%.*}"
+        out="$dir/${fn_base}.${ext}"
+    else
+        out="$dir/wallpaper-$(date +%s)-${RANDOM}.${ext}"
+    fi
 
     if [ "$ext" = "png" ] && [ "$fmt" != "PNG" ]; then
         magick "${tmp}[0]" -strip "png:$tmp.out" 2>/dev/null || exit 1
