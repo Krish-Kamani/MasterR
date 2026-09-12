@@ -40,7 +40,7 @@ Flickable {
         id: listWallpapersProc
         command: [
             "sh", "-c",
-            "WP_DIR=\"$1\"; if [ ! -d \"$WP_DIR\" ]; then WP_DIR=\"$HOME/Pictures/Wallpapers\"; fi; find \"$WP_DIR\" -maxdepth 1 -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.mp4' -o -iname '*.webm' -o -iname '*.mkv' -o -iname '*.mov' \\) -printf '%T@\\t%p\\n' | sort -rn",
+            "WP_DIR=\"$1\"; if [ ! -d \"$WP_DIR\" ]; then WP_DIR=\"$HOME/Pictures/Wallpapers\"; fi; find \"$WP_DIR\" -type f \\( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.webp' -o -iname '*.mp4' -o -iname '*.webm' -o -iname '*.mkv' -o -iname '*.mov' \\) -printf '%T@\\t%p\\n' | sort -rn",
             "_",
             Flags.wallpaperDir && Flags.wallpaperDir.length > 0 ? Flags.wallpaperDir : (Quickshell.env("HOME") + "/Pictures/Wallpapers")
         ]

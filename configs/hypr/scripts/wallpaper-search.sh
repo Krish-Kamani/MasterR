@@ -22,12 +22,16 @@ def fetch(url, timeout=10):
 
 def post_entry(url):
     html = fetch(url)
-    prev = re.search(r'<source src="(/wp-content/uploads/preview/[^"]+)"', html)
+    prev = re.search(r'<source[^>]+src="([^"]+)"', html)
+    if not prev:
+        prev = re.search(r'<video[^>]+src="([^"]+)"', html)
     token = re.search(r'id="moe-download"[^>]*data-url="([^"]+)"', html)
     thumb = re.search(r'poster="([^"]+)"', html)
     if not prev or not token:
         return None
     res = re.search(r'resolutions-(\d+)x(\d+)', html)
+    if not res:
+        res = re.search(r'(\d{3,4})\s*[x×]\s*(\d{3,4})', html)
     return {
         "image": "https://go.moewalls.com/download.php?video=" + token.group(1),
         "thumb": urllib.parse.urljoin("https://moewalls.com/", thumb.group(1)) if thumb else "",
@@ -40,7 +44,7 @@ try:
     q = urllib.parse.quote(sys.argv[1])
     page = fetch("https://moewalls.com/?s=" + q, timeout=12)
     posts = []
-    for m in re.finditer(r'href="(https://moewalls\.com/[a-z0-9-]+/[a-z0-9-]+-live-wallpaper/)"', page):
+    for m in re.finditer(r'href="(https://moewalls\.com/(?!category|tag|resolution|author|page)[a-z0-9-]+/[a-z0-9-]+(?:-live-wallpaper)?/?)"', page):
         if m.group(1) not in posts:
             posts.append(m.group(1))
     out = []
@@ -59,8 +63,12 @@ search() {
     [ -n "$query" ] || { printf '[]\n'; return 0; }
 
     if [ "$kind" = "motion" ]; then
-        search_moewalls "$query"
-        return 0
+        local moe
+        moe=$(search_moewalls "$query") || moe="[]"
+        if [ "$moe" != "[]" ] && [ -n "$moe" ]; then
+            printf '%s\n' "$moe"
+            return 0
+        fi
     fi
 
     local q="$query" f=",,,"
@@ -113,13 +121,19 @@ download() {
     mkdir -p "$dir"
 
     case "$url" in
-        https://go.moewalls.com/download.php*)
-            fn=$(curl -fsI --max-time 20 -A "$UA" -e "https://moewalls.com/" "$url" \
-                | grep -oiP 'filename=\K[^"\r\n;]+' | head -1 | tr -d '/\\')
+        https://go.moewalls.com/download.php*|*moewalls.com/download.php*|*go.moewalls.com/*)
+            headers=$(curl -fsIL --max-time 20 -A "$UA" -e "https://moewalls.com/" "$url" 2>/dev/null || true)
+            fn=$(printf '%s\n' "$headers" | sed -En 's/.*filename="?([^";[:space:]]+)"?.*/\1/p' | head -1 | tr -d '/\\' || true)
             [ -n "$fn" ] || fn="moewalls-$(date +%s).mp4"
+            case "$fn" in
+                *.[Mm][Pp]4|*.[Ww][Ee][Bb][Mm]|*.[Mm][Kk][Vv]|*.[Mm][Oo][Vv]) ;;
+                *) fn="${fn}.mp4" ;;
+            esac
             out="$dir/$fn"
-            curl -fsL --max-time 600 -A "$UA" -e "https://moewalls.com/" -o "$out" "$url" || exit 1
-            [ -s "$out" ] || exit 1
+            tmp_dl="${out}.part.$$"
+            curl -fsL --max-time 600 -A "$UA" -e "https://moewalls.com/" -o "$tmp_dl" "$url" || { rm -f "$tmp_dl"; exit 1; }
+            [ -s "$tmp_dl" ] || { rm -f "$tmp_dl"; exit 1; }
+            mv -f "$tmp_dl" "$out"
             printf '%s\n' "$out"
             exit 0
             ;;
@@ -128,12 +142,36 @@ download() {
     tmp=$(mktemp "${TMPDIR:-/tmp}/ddg-wp.XXXXXX")
     trap 'rm -f "$tmp" "$tmp.out"' EXIT
 
-    curl -fsL --max-time 60 -A "$UA" -e "https://duckduckgo.com/" -o "$tmp" "$url" || exit 1
+    curl -fsL --max-time 600 -A "$UA" -e "https://duckduckgo.com/" -o "$tmp" "$url" || exit 1
     [ -s "$tmp" ] || exit 1
+
+    mime=$(file -b --mime-type "$tmp" 2>/dev/null || true)
+    case "$mime" in
+        video/mp4)        ext="mp4" ;;
+        video/webm)       ext="webm" ;;
+        video/x-matroska) ext="mkv" ;;
+        video/quicktime)  ext="mov" ;;
+        *)                ext="" ;;
+    esac
+
+    if [ -n "$ext" ]; then
+        url_base=$(basename "${url%%\?*}" 2>/dev/null || true)
+        if [[ "$url_base" == *.* && "$url_base" != *"="* ]]; then
+            fn_base="${url_base%.*}"
+            out="$dir/${fn_base}.${ext}"
+        else
+            out="$dir/live-$(date +%s)-${RANDOM}.${ext}"
+        fi
+        cp -f "$tmp" "$out"
+        [ -s "$out" ] || exit 1
+        printf '%s\n' "$out"
+        exit 0
+    fi
 
     export MAGICK_CONFIGURE_PATH="$(dirname "$0")/magick-policy"
 
-    fmt=$(magick identify -format '%m' "${tmp}[0]" 2>/dev/null | head -1) || exit 1
+    fmt=$(magick identify -format '%m' "${tmp}[0]" 2>/dev/null | head -1 || true)
+    [ -n "$fmt" ] || exit 1
 
     case "$fmt" in
         JPEG) ext=jpg ;;

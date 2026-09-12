@@ -130,7 +130,7 @@ map_put_all() {
 }
 
 make_still() {
-    ffmpeg -y -loglevel error -i "$1" -frames:v 1 -f image2 -c:v png "$2.tmp" && mv "$2.tmp" "$2"
+    ffmpeg -y -loglevel error -i "$1" -frames:v 1 -update 1 -f image2 -c:v png "$2.tmp" && mv "$2.tmp" "$2"
 }
 
 # Animated picks wave in over their own first frame, then swap to the live

@@ -25,7 +25,7 @@ find "$wpdir" -type f \( -iname '*.jpg' -o -iname '*.png' -o -iname '*.gif' -o -
     if [ ! -s "$thumb" ] || [ "$src" -nt "$thumb" ]; then
         case "$src" in
             *.[Mm][Pp]4|*.[Ww][Ee][Bb][Mm]|*.[Mm][Kk][Vv]|*.[Mm][Oo][Vv])
-                ffmpeg -y -loglevel quiet -i "$src" -frames:v 1 -vf 'scale=512:-2' -f image2 -c:v png "$thumb.tmp" 2>/dev/null
+                ffmpeg -y -loglevel quiet -i "$src" -frames:v 1 -update 1 -vf 'scale=512:-2' -f image2 -c:v png "$thumb.tmp" 2>/dev/null
                 ;;
             *)
                 magick "${src}[0]" -strip -resize 512x "png:$thumb.tmp" 2>/dev/null
